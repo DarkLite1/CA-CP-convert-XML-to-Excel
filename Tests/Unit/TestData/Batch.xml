@@ -1,0 +1,274 @@
+<plant xmlns:msxsl="urn:schemas-microsoft-com:xslt" xmlns:user="urn:custom-scripts">
+  <plantHeader>
+    <plant_code>NL3X</plant_code>
+    <plant_name>HM Maastricht</plant_name>
+    <company_code>NL30</company_code>
+    <company_name>Mebin B.V.</company_name>
+    <country_code>NL</country_code>
+  </plantHeader>
+  <batchComputers>
+    <batchComputer>
+      <batchComputerHeader>
+        <system_type>BCC</system_type>
+        <system_provider>CACP</system_provider>
+        <system_id>-</system_id>
+        <mixer_name>Menger</mixer_name>
+        <mixer_size>5</mixer_size>
+        <extraction_id>371628</extraction_id>
+        <file_created_on>2024-08-19T08:37:15.190+02:00</file_created_on>
+        <offset>+02:00</offset>
+      </batchComputerHeader>
+      <deliveries>
+        <delivery>
+          <deliveryHeader>
+            <load_id_erp>2134789337</load_id_erp>
+            <plant_code>NL3X01</plant_code>
+            <reference_delivery />
+            <original_delivery />
+            <load_id_bcc>146850</load_id_bcc>
+            <load_order_number>2122147845</load_order_number>
+            <load_order_number_item>000010</load_order_number_item>
+            <load_mix_code>109997</load_mix_code>
+            <load_mix_code_version>NL22387253</load_mix_code_version>
+            <load_mix_name>NSTE225J</load_mix_name>
+            <load_loading_point />
+            <load_start_date>2024-08-16T09:30:25.428+02:00</load_start_date>
+            <load_end_date>2024-08-16T09:34:04.083+02:00</load_end_date>
+            <load_qty>1</load_qty>
+            <load_qty_erp>1</load_qty_erp>
+            <load_qty_unit>m3</load_qty_unit>
+            <load_qty_prod>1</load_qty_prod>
+            <load_qty_prod_unit>m3</load_qty_prod_unit>
+            <reuse_qty>0</reuse_qty>
+            <reuse_qty_unit>m3</reuse_qty_unit>
+            <load_truck>NLAFHALERDUMMY</load_truck>
+            <license_plate>NLAFHALERDUMMY</license_plate>
+            <ticket_leading_system>SAP</ticket_leading_system>
+            <ticket_id>2134789337</ticket_id>
+            <ticket_time>2024-08-16T09:30:25.420+02:00</ticket_time>
+            <batch_count>1</batch_count>
+          </deliveryHeader>
+          <batches>
+            <batch>
+              <batchHeader>
+                <batch_id>371628</batch_id>
+                <batch_id_nr>1</batch_id_nr>
+                <qty>1</qty>
+                <qty_unit>m3</qty_unit>
+                <start_time>2024-08-16T09:30:25.428+02:00</start_time>
+                <end_time>2024-08-16T09:34:04.083+02:00</end_time>
+                <manual />
+                <water_trim>-12</water_trim>
+                <water_trim_unit>kg</water_trim_unit>
+                <sequence>Nat</sequence>
+                <mixing_time>98</mixing_time>
+                <mixing_time_unit>s</mixing_time_unit>
+                <mixer_power>47.08</mixer_power>
+                <mixer_power_unit>%</mixer_power_unit>
+                <slump>0</slump>
+                <slump_unit />
+                <mixer_discharge_time>121</mixer_discharge_time>
+                <mixer_discharge_time_unit>s</mixer_discharge_time_unit>
+                <batchinformation>
+                  <aborted>False</aborted>
+                </batchinformation>
+                <dischargingOperationTimes>
+                  <discharging>
+                    <batch_id>371628</batch_id>
+                    <batch_id_nr>1</batch_id_nr>
+                    <scale_id>27681</scale_id>
+                    <material_type>zand</material_type>
+                    <discharge_start_time>2024-08-16T09:30:25.502+02:00</discharge_start_time>
+                    <discharge_end_time>2024-08-16T09:31:04.616+02:00</discharge_end_time>
+                  </discharging>
+                  <discharging>
+                    <batch_id>371628</batch_id>
+                    <batch_id_nr>1</batch_id_nr>
+                    <scale_id>27703</scale_id>
+                    <material_type>cement</material_type>
+                    <discharge_start_time>2024-08-16T09:30:25.502+02:00</discharge_start_time>
+                    <discharge_end_time>2024-08-16T09:31:06.706+02:00</discharge_end_time>
+                  </discharging>
+                  <discharging>
+                    <batch_id>371628</batch_id>
+                    <batch_id_nr>1</batch_id_nr>
+                    <scale_id>27714</scale_id>
+                    <material_type>slurry</material_type>
+                    <discharge_start_time>2024-08-16T09:30:25.502+02:00</discharge_start_time>
+                    <discharge_end_time>2024-08-16T09:31:05.374+02:00</discharge_end_time>
+                  </discharging>
+                </dischargingOperationTimes>
+              </batchHeader>
+              <batchItems>
+                <batchItem>
+                  <batchiteminformation>
+                    <pulsecount />
+                    <moisture_measure_type />
+                  </batchiteminformation>
+                  <material_code>103415</material_code>
+                  <material_name>CEM III/B 42,5 N-LH/SR BULK</material_name>
+                  <vendor />
+                  <vendor_source />
+                  <vendor_delivery />
+                  <material_type>cement</material_type>
+                  <material_target_dry>225000</material_target_dry>
+                  <material_target_dry_unit>kg</material_target_dry_unit>
+                  <material_target>225</material_target>
+                  <material_target_unit>kg</material_target_unit>
+                  <material_target_adjusted>225</material_target_adjusted>
+                  <material_target_adjusted_unit>kg</material_target_adjusted_unit>
+                  <material_amount>228</material_amount>
+                  <material_amount_unit>kg</material_amount_unit>
+                  <material_moisture />
+                  <material_moisture_unit>%</material_moisture_unit>
+                  <material_moisture_auto />
+                  <material_density>2.98</material_density>
+                  <material_density_unit>kg/l</material_density_unit>
+                  <material_absorption />
+                  <material_absorption_unit />
+                  <material_solid_content />
+                  <material_solid_content_unit />
+                  <material_temperature />
+                  <material_temperature_unit />
+                  <material_bin_number>1</material_bin_number>
+                  <material_bin_name>C1</material_bin_name>
+                  <scale_id>28577</scale_id>
+                  <dosingOperationTimes>
+                    <dosing>
+                      <scale_id>28577</scale_id>
+                      <material_dosing_start_time />
+                      <material_dosing_end_time />
+                    </dosing>
+                  </dosingOperationTimes>
+                </batchItem>
+                <batchItem>
+                  <batchiteminformation>
+                    <pulsecount>0</pulsecount>
+                    <moisture_measure_type />
+                  </batchiteminformation>
+                  <material_code>108952</material_code>
+                  <material_name>Rivierzand 0/2</material_name>
+                  <vendor />
+                  <vendor_source />
+                  <vendor_delivery />
+                  <material_type>zand</material_type>
+                  <material_target_dry>635068</material_target_dry>
+                  <material_target_dry_unit>kg</material_target_dry_unit>
+                  <material_target>654.12004</material_target>
+                  <material_target_unit>kg</material_target_unit>
+                  <material_target_adjusted>654.12004</material_target_adjusted>
+                  <material_target_adjusted_unit>kg</material_target_adjusted_unit>
+                  <material_amount>650</material_amount>
+                  <material_amount_unit>kg</material_amount_unit>
+                  <material_moisture>0.03</material_moisture>
+                  <material_moisture_unit>%</material_moisture_unit>
+                  <material_moisture_auto />
+                  <material_density>2.59</material_density>
+                  <material_density_unit>kg/l</material_density_unit>
+                  <material_absorption>0.0075</material_absorption>
+                  <material_absorption_unit />
+                  <material_solid_content />
+                  <material_solid_content_unit />
+                  <material_temperature />
+                  <material_temperature_unit />
+                  <material_bin_number>2</material_bin_number>
+                  <material_bin_name>Z2</material_bin_name>
+                  <scale_id>27923</scale_id>
+                  <dosingOperationTimes>
+                    <dosing>
+                      <scale_id>27923</scale_id>
+                      <material_dosing_start_time />
+                      <material_dosing_end_time />
+                    </dosing>
+                  </dosingOperationTimes>
+                </batchItem>
+                <batchItem>
+                  <batchiteminformation>
+                    <pulsecount>0</pulsecount>
+                    <moisture_measure_type />
+                  </batchiteminformation>
+                  <material_code>108954</material_code>
+                  <material_name>Rivierzand 0/4</material_name>
+                  <vendor />
+                  <vendor_source />
+                  <vendor_delivery />
+                  <material_type>zand</material_type>
+                  <material_target_dry>956280</material_target_dry>
+                  <material_target_dry_unit>kg</material_target_dry_unit>
+                  <material_target>989.7498</material_target>
+                  <material_target_unit>kg</material_target_unit>
+                  <material_target_adjusted>989.7498</material_target_adjusted>
+                  <material_target_adjusted_unit>kg</material_target_adjusted_unit>
+                  <material_amount>1000</material_amount>
+                  <material_amount_unit>kg</material_amount_unit>
+                  <material_moisture>0.035</material_moisture>
+                  <material_moisture_unit>%</material_moisture_unit>
+                  <material_moisture_auto />
+                  <material_density>2.6</material_density>
+                  <material_density_unit>kg/l</material_density_unit>
+                  <material_absorption>0.0065</material_absorption>
+                  <material_absorption_unit />
+                  <material_solid_content />
+                  <material_solid_content_unit />
+                  <material_temperature />
+                  <material_temperature_unit />
+                  <material_bin_number>1</material_bin_number>
+                  <material_bin_name>Z1</material_bin_name>
+                  <scale_id>27912</scale_id>
+                  <dosingOperationTimes>
+                    <dosing>
+                      <scale_id>27912</scale_id>
+                      <material_dosing_start_time />
+                      <material_dosing_end_time />
+                    </dosing>
+                  </dosingOperationTimes>
+                </batchItem>
+                <batchItem>
+                  <batchiteminformation>
+                    <pulsecount />
+                    <moisture_measure_type />
+                  </batchiteminformation>
+                  <material_code>60716522</material_code>
+                  <material_name>Slibwater</material_name>
+                  <vendor />
+                  <vendor_source />
+                  <vendor_delivery />
+                  <material_type>slurry</material_type>
+                  <material_target_dry>130</material_target_dry>
+                  <material_target_dry_unit>kg</material_target_dry_unit>
+                  <material_target>88.45699</material_target>
+                  <material_target_unit>kg</material_target_unit>
+                  <material_target_adjusted>76.45699</material_target_adjusted>
+                  <material_target_adjusted_unit>kg</material_target_adjusted_unit>
+                  <material_amount>76</material_amount>
+                  <material_amount_unit>kg</material_amount_unit>
+                  <material_moisture />
+                  <material_moisture_unit>%</material_moisture_unit>
+                  <material_moisture_auto />
+                  <material_density>1</material_density>
+                  <material_density_unit>kg/l</material_density_unit>
+                  <material_absorption />
+                  <material_absorption_unit />
+                  <material_solid_content />
+                  <material_solid_content_unit />
+                  <material_temperature>10</material_temperature>
+                  <material_temperature_unit>°C</material_temperature_unit>
+                  <material_bin_number>3</material_bin_number>
+                  <material_bin_name>W3</material_bin_name>
+                  <scale_id>28101</scale_id>
+                  <dosingOperationTimes>
+                    <dosing>
+                      <scale_id>28101</scale_id>
+                      <material_dosing_start_time />
+                      <material_dosing_end_time />
+                    </dosing>
+                  </dosingOperationTimes>
+                </batchItem>
+              </batchItems>
+            </batch>
+          </batches>
+        </delivery>
+      </deliveries>
+    </batchComputer>
+  </batchComputers>
+</plant>

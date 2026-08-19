@@ -1,0 +1,20 @@
+{
+  "Type": "Alarm",
+  "MaxConcurrentJobs": {
+    "GetXmlFileDates": 5,
+    "CreateExcelFile": 1
+  },
+  "SendMail": {
+    "To": ["bob@contoso.com"],
+    "When": "Always"
+  },
+  "ExcelFileName": "Alarms - {0} - XML Files summary.xlsx",
+  "Path": {
+    "XmlFiles": "C:\\XML Files folder\\Alarm",
+    "ExcelFiles": "C:\\Excel Files folder\\Alarm"
+  },
+  "?": {
+    "Type": "Batch | Alarm | Sequence",
+    "SendMail.When": "Never | OnlyOnError | OnlyOnErrorOrAction | Always"
+  }
+}

@@ -1,0 +1,165 @@
+<plant xmlns:msxsl="urn:schemas-microsoft-com:xslt" xmlns:user="urn:custom-scripts">
+  <plantHeader>
+    <plant_code>NL3K</plant_code>
+    <plant_name>Amersfoort B</plant_name>
+    <company_code>NL30</company_code>
+    <company_name>Mebin B.V.</company_name>
+    <country_code>NL</country_code>
+  </plantHeader>
+  <batchComputers>
+    <batchComputer>
+      <batchComputerHeader>
+        <system_type>BCC</system_type>
+        <system_provider>CACP</system_provider>
+        <system_id>-</system_id>
+        <mixer_name>#Menger</mixer_name>
+        <mixer_size>3</mixer_size>
+        <extraction_id />
+        <file_created_on>2024-05-08T11:51:31.782+02:00</file_created_on>
+        <offset>+02:00</offset>
+      </batchComputerHeader>
+      <alarms>
+        <alarm>
+          <id>85766</id>
+          <raised>2024-05-07T07:47:07.605+02:00</raised>
+          <dropped />
+          <handled />
+          <clicktimestamp />
+          <text>Hulpstofweger : Gewicht : %s   Voor : %s    Na : %s</text>
+          <message />
+          <parameter>2,23|-0,06|2,17</parameter>
+          <alarm_message>Hulpstofweger : Gewicht : 2,23   Voor : -0,06    Na : 2,17</alarm_message>
+          <ticket>
+            <id>68500</id>
+            <code />
+            <reference />
+            <customer />
+            <project />
+            <wanted>0</wanted>
+            <truck />
+          </ticket>
+          <batch>
+            <id>211160</id>
+            <timestart>2024-05-07T07:47:01.725+02:00</timestart>
+            <timeready />
+            <wanted>0</wanted>
+            <weighlistcode />
+            <weighlistname />
+          </batch>
+          <alarmgroups>
+            <alarmgroup>
+              <code />
+              <name />
+              <description />
+            </alarmgroup>
+          </alarmgroups>
+        </alarm>
+        <alarm>
+          <id>85767</id>
+          <raised>2024-05-07T07:47:07.605+02:00</raised>
+          <dropped />
+          <handled />
+          <clicktimestamp />
+          <text>Cementweger : Gewicht : %s   Voor : %s    Na : %s</text>
+          <message />
+          <parameter>232|12|244</parameter>
+          <alarm_message>Cementweger : Gewicht : 232   Voor : 12    Na : 244</alarm_message>
+          <ticket>
+            <id>68500</id>
+            <code />
+            <reference />
+            <customer />
+            <project />
+            <wanted>0</wanted>
+            <truck />
+          </ticket>
+          <batch>
+            <id>211160</id>
+            <timestart>2024-05-07T07:47:01.725+02:00</timestart>
+            <timeready />
+            <wanted>0</wanted>
+            <weighlistcode />
+            <weighlistname />
+          </batch>
+          <alarmgroups>
+            <alarmgroup>
+              <code />
+              <name />
+              <description />
+            </alarmgroup>
+          </alarmgroups>
+        </alarm>
+        <alarm>
+          <id>85768</id>
+          <raised>2024-05-07T07:47:07.605+02:00</raised>
+          <dropped />
+          <handled />
+          <clicktimestamp />
+          <text>Toeslagweger : Gewicht : %s   Voor : %s    Na : %s</text>
+          <message />
+          <parameter>1110|-40|1070</parameter>
+          <alarm_message>Toeslagweger : Gewicht : 1110   Voor : -40    Na : 1070</alarm_message>
+          <ticket>
+            <id>68500</id>
+            <code />
+            <reference />
+            <customer />
+            <project />
+            <wanted>0</wanted>
+            <truck />
+          </ticket>
+          <batch>
+            <id>211160</id>
+            <timestart>2024-05-07T07:47:01.725+02:00</timestart>
+            <timeready />
+            <wanted>0</wanted>
+            <weighlistcode />
+            <weighlistname />
+          </batch>
+          <alarmgroups>
+            <alarmgroup>
+              <code />
+              <name />
+              <description />
+            </alarmgroup>
+          </alarmgroups>
+        </alarm>
+        <alarm>
+          <id>85769</id>
+          <raised>2024-05-07T07:47:07.605+02:00</raised>
+          <dropped />
+          <handled />
+          <clicktimestamp />
+          <text>Waterweger : Gewicht : %s   Voor : %s    Na : %s</text>
+          <message />
+          <parameter>190|0|190</parameter>
+          <alarm_message>Waterweger : Gewicht : 190   Voor : 0    Na : 190</alarm_message>
+          <ticket>
+            <id>68500</id>
+            <code />
+            <reference />
+            <customer />
+            <project />
+            <wanted>0</wanted>
+            <truck />
+          </ticket>
+          <batch>
+            <id>211160</id>
+            <timestart>2024-05-07T07:47:01.725+02:00</timestart>
+            <timeready />
+            <wanted>0</wanted>
+            <weighlistcode />
+            <weighlistname />
+          </batch>
+          <alarmgroups>
+            <alarmgroup>
+              <code />
+              <name />
+              <description />
+            </alarmgroup>
+          </alarmgroups>
+        </alarm>
+      </alarms>
+    </batchComputer>
+  </batchComputers>
+</plant>
