@@ -59,12 +59,23 @@ only once in each.
 ### Prerequisites
 
 - **PowerShell 7.x or later.**
-- **ImportExcel** for reading and writing `.xlsx` files:
+- **ImportExcel** — the *only* external PowerShell module dependency:
   ```powershell
   Install-Module -Name 'ImportExcel' -Scope 'AllUsers'
   ```
-- The internal **`Toolbox.EventLog`** and **`Toolbox.HTML`** modules, used by the
-  orchestrator for event logging and mail.
+- **MailKit and MimeKit**, only when e-mail is used. These are .NET assemblies
+  loaded with `Add-Type`, not PowerShell modules, so ImportExcel stays the only
+  module dependency. Their paths go in the configuration file under
+  `Settings.SendMail.AssemblyPath`:
+  ```powershell
+  Install-Package -Name 'MailKit' -Source 'https://www.nuget.org/api/v2' -Scope 'AllUsers' -SkipDependencies
+  Install-Package -Name 'MimeKit' -Source 'https://www.nuget.org/api/v2' -Scope 'AllUsers' -SkipDependencies
+  ```
+
+Writing to the Windows event log, writing the log files and building and sending
+the summary e-mail are all done by the module's own helper functions, taken from
+the [Permission-matrix](https://github.com/DarkLite1/Permission-matrix-set-permissions)
+project. There is no dependency on `Toolbox.EventLog` or `Toolbox.HTML`.
 
 ### Usage
 
@@ -72,7 +83,7 @@ Review the samples in the **`Examples`** folder, create your own configuration
 file, then run the entrypoint:
 
 ```powershell
-pwsh.exe -Command "& '.\Scripts\Entrypoints\ConvertXmlToExcel.ps1' -ScriptName 'CP Batch' -ImportFile 'C:\MyConfig.json'; exit `$LASTEXITCODE"
+pwsh.exe -Command "& '.\Scripts\Entrypoints\ConvertXmlToExcel.ps1' -ConfigurationJsonFile 'C:\MyConfig.json'; exit `$LASTEXITCODE"
 ```
 
 One scheduled task per type, each with its own configuration file, XML folder and
@@ -88,8 +99,16 @@ CA-CP-convert-XML-file-to-Excel/
 │       ├── ConvertXmlToExcel.psd1  Module manifest
 │       ├── ConvertXmlToExcel.psm1  Loader (dot-sources Private + Public)
 │       ├── Public/
-│       │   └── Invoke-ConvertXmlToExcel.ps1   Orchestrator (grouping, archiving, mail)
-│       └── Private/                One function per file (helpers, row builders, workbook engine)
+│       │   └── Invoke-ConvertXmlToExcel.ps1   Orchestrator (grouping, archiving, logging, mail)
+│       └── Private/                Grouped per subject:
+│                                     ExcelWorkbook.ps1       open, fill, format the workbooks
+│                                     XmlRow.ps1              turn XML nodes into rows
+│                                     WorksheetDefinition.ps1 worksheets, headers, colors
+│                                     ErrorHandling.ps1       Add-ErrorHC
+│                                     Utils.ps1               ENV: values, dated log folder
+│                                     Logging.ps1             log files and Windows event log
+│                                     Mail.ps1                MailKit send, save body to log
+│                                     SummaryMail.ps1         subject and HTML body
 ├── Scripts/
 │   ├── Entrypoints/
 │   │   └── ConvertXmlToExcel.ps1   Thin bootstrap: imports the module, calls the orchestrator
@@ -106,13 +125,29 @@ rather than relying on the module's exports.
 
 ## ⚙️ Configuration
 
-Copy one of the `Examples/Example.*.json` files and adjust the values. Changes
-compared with the old scripts:
+Copy one of the `Examples/Example.*.json` files and adjust the values. Every
+option is documented inside the file itself, in the `?` block at the bottom:
+whether it is mandatory, the accepted values and the default. Most string fields
+also accept an `ENV:` reference (for example `"ENV:SMTP_PASSWORD"`), so secrets
+never have to be stored in the configuration file.
+
+The file has two halves:
+
+- **`Type`, `MaxConcurrentJobs`, `Path`, `ExcelFileName`** — what to convert and
+  where the files live.
+- **`Settings`** — how the script reports: `SendMail` (sender, recipients, when
+  to send, SMTP server, MailKit/MimeKit assembly paths), `SaveLogFiles` (where
+  the dated log folder goes and how long logs are kept) and `SaveInEventLog`
+  (whether and where to write Windows event log entries).
+
+Changes compared with the old scripts:
 
 - **`Type`** added — one of `Batch`, `Alarm` or `Sequence`.
 - **`MaxConcurrentJobs.GetXmlFileLoadingDate`** / `.GetAlarmRaisedDate` /
   `.GetXmlFileCreationDate` are replaced by a single
   **`MaxConcurrentJobs.GetXmlFileDates`**.
+- **`SendMail`** moved under **`Settings`** and gained `From`, `Smtp` and
+  `AssemblyPath`, because mail is no longer sent by an internal module.
 
 `ExcelFileName` and the worksheet and table names are unchanged, so the tool
 keeps appending to the Excel files created by the previous version.

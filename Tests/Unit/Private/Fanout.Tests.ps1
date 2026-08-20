@@ -10,7 +10,7 @@
 #>
 
 BeforeAll {
-    $root = Resolve-Path "$PSScriptRoot\..\.."
+    $root = Resolve-Path "$PSScriptRoot\..\..\.."
     $moduleRoot = "$root\Modules\ConvertXmlToExcel"
 
     $script:modulePath = "$moduleRoot\ConvertXmlToExcel.psm1"
@@ -20,7 +20,7 @@ BeforeAll {
     . "$moduleRoot\Private\Get-MonthKeyHC.ps1"
 
     # A batch file with deliveries in August and September
-    . "$root\Tests\Helpers\Fixtures.Xml.ps1"
+    . "$root\Tests\Unit\Helpers\Fixtures.Xml.ps1"
 
     function Get-RowMonthHC {
         param($Value)

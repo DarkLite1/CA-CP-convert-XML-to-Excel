@@ -5,7 +5,7 @@ BeforeAll {
     $root = Resolve-Path "$PSScriptRoot\..\..\.."
     $moduleRoot = "$root\Modules\ConvertXmlToExcel"
 
-    . "$moduleRoot\Private\Get-FileNameInWorkbookHC.ps1"
+    . "$moduleRoot\Private\ExcelWorkbook.ps1"
 
     <#
         A fake plant worksheet. Dimension.End.Row reports the last row and

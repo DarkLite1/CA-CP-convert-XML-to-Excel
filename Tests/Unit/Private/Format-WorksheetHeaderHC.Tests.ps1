@@ -5,7 +5,7 @@ BeforeAll {
     $root = Resolve-Path "$PSScriptRoot\..\..\.."
     $moduleRoot = "$root\Modules\ConvertXmlToExcel"
 
-    . "$moduleRoot\Private\Format-WorksheetHeaderHC.ps1"
+    . "$moduleRoot\Private\WorksheetDefinition.ps1"
 
     # A tiny fake worksheet whose cell exposes the Style shape the function sets
     function New-FakeWorksheet {

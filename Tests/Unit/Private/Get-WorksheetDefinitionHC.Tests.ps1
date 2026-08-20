@@ -5,7 +5,7 @@ BeforeAll {
     $root = Resolve-Path "$PSScriptRoot\..\..\.."
     $moduleRoot = "$root\Modules\ConvertXmlToExcel"
 
-    . "$moduleRoot\Private\Get-WorksheetDefinitionHC.ps1"
+    . "$moduleRoot\Private\WorksheetDefinition.ps1"
 }
 
 Describe 'Get-WorksheetDefinitionHC' {

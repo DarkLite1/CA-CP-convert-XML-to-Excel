@@ -23,16 +23,25 @@ Describe 'Invoke-ConvertXmlToExcel' {
         Should-BeCollection @('Invoke-ConvertXmlToExcel')
     }
 
+    It 'requires only ImportExcel as an external module' {
+        $manifest = Import-PowerShellDataFile "$root\Modules\ConvertXmlToExcel\ConvertXmlToExcel.psd1"
+
+        $required = @($manifest.RequiredModules)
+
+        $required | Should-BeCollection -Count 1
+        $required[0].ModuleName | Should-Be 'ImportExcel'
+    }
+
     Context 'mandatory parameters' {
         BeforeAll {
             $params = (Get-Command Invoke-ConvertXmlToExcel).Parameters
         }
 
         It 'requires <Name>' -ForEach @(
-            @{ Name = 'ScriptName' }
-            @{ Name = 'ImportFile' }
+            @{ Name = 'ConfigurationJsonFile' }
             @{ Name = 'ScriptPath' }
             @{ Name = 'ModulePath' }
+            @{ Name = 'SystemErrors' }
         ) {
             $attribute = $params[$Name].Attributes |
             Where-Object { $_ -is [System.Management.Automation.ParameterAttribute] }

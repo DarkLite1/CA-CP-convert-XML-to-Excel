@@ -5,8 +5,7 @@ BeforeAll {
     $root = Resolve-Path "$PSScriptRoot\..\..\.."
     $moduleRoot = "$root\Modules\ConvertXmlToExcel"
 
-    . "$moduleRoot\Private\Test-RowLimitHC.ps1"
-    . "$moduleRoot\Private\Add-RowToWorkbookHC.ps1"
+    . "$moduleRoot\Private\ExcelWorkbook.ps1"
 
     # Fake worksheet whose Cells[...] .Value setter records into a shared store
     function New-FakeSheet {

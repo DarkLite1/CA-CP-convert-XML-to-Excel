@@ -10,6 +10,12 @@
         from Get-WorksheetDefinitionHC and the rows from Get-XmlRowHC.
 #>
 
+<#
+    The maximum number of rows a worksheet can hold in the .xlsx format. Used
+    by Test-RowLimitHC to refuse an XML file that would not fit completely.
+#>
+$script:ExcelMaxRowNumber = 1048576
+
 function Open-ExcelWorkbookHC {
     <#
         .SYNOPSIS
@@ -169,7 +175,8 @@ function Test-RowLimitHC {
         [HashTable]$Workbook,
         [Parameter(Mandatory)]
         [AllowEmptyCollection()]
-        [Array]$Rows
+        [Array]$Rows,
+        [int]$MaxRowNumber = $script:ExcelMaxRowNumber
     )
 
     $requiredRows = @{}
@@ -181,7 +188,11 @@ function Test-RowLimitHC {
     foreach ($item in $requiredRows.GetEnumerator()) {
         $sheet = $Workbook.Sheet[$item.Key]
 
-        if (($sheet.RowNumber + $item.Value - 1) -gt $script:ExcelMaxRowNumber) {
+        <#
+            '-ge' and not '-gt': a worksheet cannot hold a row AT the maximum
+            row number either, so writing has to stop one row earlier.
+        #>
+        if (($sheet.RowNumber + $item.Value - 1) -ge $MaxRowNumber) {
             return $false
         }
     }
@@ -291,7 +302,15 @@ function Format-ExcelWorkbookHC {
                 if ($definition.DateColumns) {
                     $lastRow = $sheet.Worksheet.Dimension.End.Row
 
+                    <#
+                        Data rows start at row 3. When a worksheet only holds
+                        its header rows (for example a batch with no discharging
+                        operations) there is nothing to format and the range
+                        'H3:H2' would be invalid, so it is skipped.
+                    #>
                     foreach ($column in $definition.DateColumns) {
+                        if ($lastRow -lt 3) { continue }
+
                         try {
                             $range = '{0}3:{0}{1}' -f $column, $lastRow
                             $sheet.Worksheet.Cells[$range].Style.NumberFormat.Format = 'dd/mm/yyyy hh:mm:ss'

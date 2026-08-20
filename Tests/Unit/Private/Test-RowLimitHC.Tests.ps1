@@ -5,7 +5,7 @@ BeforeAll {
     $root = Resolve-Path "$PSScriptRoot\..\..\.."
     $moduleRoot = "$root\Modules\ConvertXmlToExcel"
 
-    . "$moduleRoot\Private\Test-RowLimitHC.ps1"
+    . "$moduleRoot\Private\ExcelWorkbook.ps1"
 
     function New-FakeWorkbook {
         param([hashtable]$RowNumbers)

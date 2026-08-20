@@ -70,9 +70,11 @@ Invoke-Pester -Path .\Tests\Unit\Private\Get-XmlFileMonthHC.Tests.ps1 -Output De
 ## What is not covered
 
 `Invoke-ConvertXmlToExcel` (the orchestrator) is only checked for its public
-contract — that it is exported and which parameters are mandatory. Its full
-begin/process/end flow depends on the internal `Toolbox.EventLog` and
-`Toolbox.HTML` modules (event log, mail) and on Windows file shares, so it is
-exercised in the real environment rather than in unit tests. The grouping and
-export logic it orchestrates is covered directly by the `Get-XmlFileMonthHC`,
-`Get-XmlRowHC` and integration tests.
+contract — that it is exported, that ImportExcel is its only external module
+dependency, and which parameters are mandatory. Its full run needs the Windows
+event log, the MailKit/MimeKit assemblies and Windows file shares, so it is
+exercised in the real environment rather than in unit tests. Everything it
+orchestrates is covered directly: `Get-XmlFileMonthHC` and `Get-XmlRowHC` for
+the grouping, `Fanout.Tests.ps1` for the export end to end, and
+`Utils.Tests.ps1`, `ErrorHandling.Tests.ps1`, `Mail.Tests.ps1` and
+`SummaryMail.Tests.ps1` for the bundled helpers.

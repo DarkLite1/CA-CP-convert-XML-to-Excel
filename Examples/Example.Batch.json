@@ -4,17 +4,84 @@
     "GetXmlFileDates": 5,
     "CreateExcelFile": 1
   },
-  "SendMail": {
-    "To": ["bob@contoso.com"],
-    "When": "Always"
-  },
-  "ExcelFileName": "Batches - {0} - XML Files summary.xlsx",
   "Path": {
     "XmlFiles": "C:\\XML Files folder\\Batch",
     "ExcelFiles": "C:\\Excel Files folder\\Batch"
   },
+  "ExcelFileName": "Batches - {0} - XML Files summary.xlsx",
+  "Settings": {
+    "ScriptName": "CP Batch",
+    "SendMail": {
+      "From": "no-reply-cp-automation@contoso.com",
+      "FromDisplayName": "CP XML to Excel",
+      "To": ["bob@contoso.com"],
+      "Bcc": [],
+      "When": "Always",
+      "Smtp": {
+        "ServerName": "SERVER1.CONTOSO.COM",
+        "Port": 25,
+        "ConnectionType": "None",
+        "UserName": "",
+        "Password": ""
+      },
+      "AssemblyPath": {
+        "MailKit": "C:\\Program Files\\PackageManagement\\NuGet\\Packages\\MailKit.4.13.0\\lib\\net8.0\\MailKit.dll",
+        "MimeKit": "C:\\Program Files\\PackageManagement\\NuGet\\Packages\\MimeKit.4.13.0\\lib\\net8.0\\MimeKit.dll"
+      }
+    },
+    "SaveLogFiles": {
+      "Where": {
+        "Folder": "C:\\Log\\File or folder\\CP Batch"
+      },
+      "DeleteLogsAfterDays": 30
+    },
+    "SaveInEventLog": {
+      "Save": true,
+      "LogName": "Scripts"
+    }
+  },
   "?": {
-    "Type": "Batch | Alarm | Sequence",
-    "SendMail.When": "Never | OnlyOnError | OnlyOnErrorOrAction | Always"
+    "Type": "(Mandatory) The kind of XML file to convert. Possible values: 'Batch', 'Alarm' or 'Sequence'. This selects the worksheets, the headers and the row layout. It also selects the date that decides in which month a record belongs: 'Batch' uses the delivery's 'load_start_date', 'Alarm' uses the alarm's 'raised', 'Sequence' uses the batch computer's 'file_created_on'.",
+    "MaxConcurrentJobs": {
+      "GetXmlFileDates": "(Mandatory) Maximum quantity of XML files to read the dates from at the same time. Must be a number. Use 1 to run sequentially.",
+      "CreateExcelFile": "(Mandatory) Maximum quantity of Excel files to write at the same time. Must be a number. Use 1 to run sequentially. CAUTION: only raise this when each month writes to its own Excel file. Two jobs writing the same workbook at the same time corrupt it."
+    },
+    "Path": {
+      "XmlFiles": "(Mandatory) The folder that holds the incoming XML files. Files that were converted without a single error are moved to the sub folder 'Archive' inside this folder. Supports environment variables (e.g., 'ENV:XML_FOLDER').",
+      "ExcelFiles": "(Mandatory) The folder where the monthly Excel files are created and updated. Supports environment variables (e.g., 'ENV:EXCEL_FOLDER')."
+    },
+    "ExcelFileName": "(Mandatory) The name pattern of the Excel file. Must contain the placeholder '{0}', which is replaced by the month (e.g., '202408 August'), and must end with '.xlsx'. One Excel file is created per month found in the XML files. CAUTION: do not change this once Excel files exist, because the script would start new workbooks instead of appending to the existing ones.",
+    "Settings": {
+      "ScriptName": "(Mandatory) Name of the script, used in the log file names and as the source in the Windows event log.",
+      "SendMail": {
+        "From": "(Mandatory) The sender's email address. Supports environment variables (e.g., 'ENV:MAIL_FROM_ADDRESS').",
+        "FromDisplayName": "(Optional) The display name to show for the sender. Email clients may display this differently. It is most likely to be shown if the sender's email address is not recognized (e.g., not in the address book). Supports environment variables (e.g., 'ENV:MAIL_FROM_DISPLAY_NAME').",
+        "To": "(Mandatory 'To' or 'Bcc') An array of recipient email addresses. The script will send an email to all addresses in the array.",
+        "Bcc": "(Mandatory 'To' or 'Bcc') An array of BCC email addresses.",
+        "When": "(Mandatory) When to send the summary email. Possible values: 'Never' - never send an email; 'Always' - always send an email; 'OnlyOnError' - only when at least one error occurred; 'OnlyOnErrorOrAction' - when an error occurred, when an XML file was added to an Excel file, or when an XML file could not be archived.",
+        "Smtp": {
+          "ServerName": "(Mandatory) The hostname or IP address of the SMTP server. Supports environment variables (e.g., 'ENV:SMTP_SERVER').",
+          "Port": "(Mandatory) The port number of the SMTP server. Possible values: 25, 465, 587, 2525. Supports environment variables (e.g., 'ENV:SMTP_PORT').",
+          "ConnectionType": "(Optional) The connection type for the SMTP server. Possible values: 'None' - No encryption; 'Auto' - Attempt TLS, fall back to unencrypted; 'SslOnConnect' - Use SSL from the beginning; 'StartTls' - Start with unencrypted, then upgrade to TLS; 'StartTlsWhenAvailable' - Start with unencrypted, upgrade to TLS if supported. Default value: 'None'. Supports environment variables (e.g., 'ENV:SMTP_CONNECTION_TYPE').",
+          "UserName": "(Optional) The username for authenticating with the SMTP server. If undefined or NULL, no authentication is attempted. Supports environment variables (e.g., 'ENV:SMTP_USERNAME').",
+          "Password": "(Optional) The password for authenticating with the SMTP server. If undefined or NULL, no authentication is attempted. Supports environment variables (e.g., 'ENV:SMTP_PASSWORD')."
+        },
+        "AssemblyPath": {
+          "?": "To use email functionality, install the following packages: 'Install-Package -Name 'MailKit' -Source 'https:\\www.nuget.org/api/v2' -Scope 'AllUsers' -SkipDependencies' and 'Install-Package -Name 'MimeKit' -Source 'https:\\www.nuget.org/api/v2' -Scope 'AllUsers' -SkipDependencies'. These are .NET assemblies loaded with Add-Type, not PowerShell modules, so 'ImportExcel' stays the only module dependency of this script.",
+          "MailKit": "(Mandatory) Path to the MailKit.dll assembly. Supports environment variables (e.g., 'ENV:MAILKIT_ASSEMBLY').",
+          "MimeKit": "(Mandatory) Path to the MimeKit.dll assembly. Supports environment variables (e.g., 'ENV:MIMEKIT_ASSEMBLY')."
+        }
+      },
+      "SaveLogFiles": {
+        "Where": {
+          "Folder": "(Mandatory) The path to the folder where log files will be created. A dated sub folder is created for each run, holding the overview of the converted files, the files that were not archived, the errors and a copy of the summary email. Value '..\\\\Logs': Path relative to the script. Value 'C:\\\\MyApp\\\\Logs': An absolute path. Supports environment variables (e.g., 'ENV:LOG_FOLDER')."
+        },
+        "DeleteLogsAfterDays": "(Optional) The number of days to keep log files. Log files older than this value (based on their creation time) will be removed from the log folder specified in 'SaveLogFiles.Where.Folder'. If not specified or 0, logs will be kept indefinitely. CAUTION: Ensure the 'SaveLogFiles.Where.Folder' is specifically designated for log files to avoid unintended deletion of other files."
+      },
+      "SaveInEventLog": {
+        "Save": "(Mandatory) Whether to log messages to the Windows event log. Possible values: true or false. CAUTION: creating a new event log source requires administrator rights the first time the script runs.",
+        "LogName": "(Mandatory) The name of the event log to write to (e.g., 'Application', 'System', or a custom log name like 'Scripts'). Supports environment variables (e.g., 'ENV:EVENT_LOG_NAME')."
+      }
+    }
   }
 }
