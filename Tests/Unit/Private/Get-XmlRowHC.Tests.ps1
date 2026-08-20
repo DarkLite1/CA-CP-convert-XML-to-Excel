@@ -9,12 +9,9 @@ BeforeAll {
     . "$moduleRoot\Private\ConvertTo-CorrectTypeHC.ps1"
     . "$moduleRoot\Private\ConvertTo-DateTimeHC.ps1"
     . "$moduleRoot\Private\Get-MonthKeyHC.ps1"
-    . "$moduleRoot\Private\Get-BatchRowHC.ps1"
-    . "$moduleRoot\Private\Get-AlarmRowHC.ps1"
-    . "$moduleRoot\Private\Get-SequenceRowHC.ps1"
-    . "$moduleRoot\Private\Get-XmlRowHC.ps1"
+    . "$moduleRoot\Private\XmlRow.ps1"
 
-    . "$root\Tests\Helpers\Fixtures.Xml.ps1"
+    . "$root\Tests\Unit\Helpers\Fixtures.Xml.ps1"
 }
 
 Describe 'Get-XmlRowHC' {
