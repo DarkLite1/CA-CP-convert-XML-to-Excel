@@ -41,7 +41,7 @@
     }
   },
   "?": {
-    "Type": "(Mandatory) The kind of XML file to convert. Possible values: 'Alarm', 'Alarm' or 'Sequence'. This selects the worksheets, the headers and the row layout. It also selects the date that decides in which month a record belongs: 'Alarm' uses the delivery's 'load_start_date', 'Alarm' uses the alarm's 'raised', 'Sequence' uses the Alarm computer's 'file_created_on'.",
+    "Type": "(Mandatory) The kind of XML file to convert. Possible values: 'Batch', 'Alarm' or 'Sequence'. This selects the worksheets, the headers and the row layout. It also selects the date that decides in which month a record belongs: 'Batch' uses the delivery's 'load_start_date', 'Alarm' uses the alarm's 'raised', 'Sequence' uses the batch computer's 'file_created_on'.",
     "MaxConcurrentJobs": {
       "GetXmlFileDates": "(Mandatory) Maximum quantity of XML files to read the dates from at the same time. Must be a number. Use 1 to run sequentially.",
       "CreateExcelFile": "(Mandatory) Maximum quantity of Excel files to write at the same time. Must be a number. Use 1 to run sequentially. CAUTION: only raise this when each month writes to its own Excel file. Two jobs writing the same workbook at the same time corrupt it."
