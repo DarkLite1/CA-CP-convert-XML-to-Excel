@@ -2,29 +2,30 @@
 
 A PowerShell tool that reads TMS CP **batch**, **alarm** and **sequence** XML
 files from a folder and exports their content to Excel files, **one Excel file
-per month**. A single XML file that holds records of more than one month is
-written to more than one Excel file, each getting only the records of its own
-month.
+per month**.
 
-This repository merges three former repositories into one:
+The `Type` property in the configuration file (`Batch`, `Alarm` or `Sequence`)
+selects the worksheets, headers and row layout. Everything else is shared, so
+all three types run the same code with a different configuration file.
 
-- `CA-CP-convert-batch-XML-file-to-Excel`
-- `CA-CP-convert-alarm-XML-file-to-Excel`
-- `CA-CP-convert-sequence-XML-file-to-Excel`
+## 🌟 How it works
 
-The differences between the three are now data, not code: the `Type` property in
-the configuration file (`Batch`, `Alarm` or `Sequence`) selects the worksheets,
-headers and row layout. Everything else is shared.
+Each run does four things:
 
-## 🌟 What changed
+1. **Read the months.** Every XML file in the folder is opened and the month of
+   each record is determined.
+2. **Group per month.** Files are grouped by month, one group per Excel file.
+3. **Write the Excel files.** Each group is written to the Excel file of its
+   month, appending to it when it already exists.
+4. **Archive.** Every XML file that was written without a single error is moved
+   to the `Archive` sub folder.
+
+Afterwards a summary e-mail is sent, log files are written to a dated folder and
+an entry is added to the Windows event log.
 
 ### One XML file can fill more than one Excel file
 
-The old scripts read a single date per XML file and wrote the whole file to the
-Excel file of that month. That was wrong for a file holding records of more than
-one month — for example a batch file with one delivery loaded today and another
-loaded tomorrow, where tomorrow is the first day of the next month. Now the
-month is decided per record:
+The month is decided **per record**, not per file:
 
 | Type     | Month decided per | On                                    |
 | -------- | ----------------- | ------------------------------------- |
@@ -32,27 +33,35 @@ month is decided per record:
 | Alarm    | alarm             | `alarm.raised`                        |
 | Sequence | batch computer    | `batchComputerHeader.file_created_on` |
 
+An XML file holding records of two months is therefore written to two Excel
+files, each getting only the records of its own month. A batch file with one
+delivery loaded on the last day of the month and another loaded the next day is
+the common case.
+
 A delivery is never split: its batches, discharging operations and batch items
 follow their delivery. A row on the `plantBatchComputers` worksheet is written
 only for a batch computer that actually has records in that month.
 
-### Archiving moved to the orchestrator, and only on success
+### Nothing is archived unless it fully succeeded
 
-Because one XML file can now feed more than one Excel file, it may only be
-archived after every Excel file has been handled — so archiving moved out of the
-export step and into `Invoke-ConvertXmlToExcel`. A file is archived only when
-all of its records were written without a single error. If anything fails, the
-file stays in place and is listed in the summary mail under **"XML files NOT
-archived, manual action required"**, so it can be investigated and retried on
-the next run. Because the run is daily, this forces a manual look at problems
-instead of silently moving a half-processed file away.
+An XML file is moved to the `Archive` sub folder only when all of its records
+were written without a single error. If anything fails, the file stays where it
+is and is listed in the summary e-mail under **"XML files NOT archived, manual
+action required"**, so the problem can be investigated and the file picked up
+again on the next run.
 
-### Duplicate check
+### An XML file is never added twice
 
 An XML file is added to an Excel file completely or not at all, so the file name
-in column A of `plantBatchComputers` is enough to know whether it is already
-there. The same file name may appear in two different monthly Excel files, but
-only once in each.
+in column A of `plantBatchComputers` tells the script whether that file is
+already in that workbook. The same file name can appear in two different monthly
+Excel files, but only once in each.
+
+### A file that does not fit is not written
+
+Before writing, the script checks that every row still fits within the maximum
+number of rows of a worksheet. If it does not, nothing is written for that file
+and it is reported as an error rather than leaving half a file in the workbook.
 
 ## 🚀 Getting started
 
@@ -73,9 +82,8 @@ only once in each.
   ```
 
 Writing to the Windows event log, writing the log files and building and sending
-the summary e-mail are all done by the module's own helper functions, taken from
-the [Permission-matrix](https://github.com/DarkLite1/Permission-matrix-set-permissions)
-project. There is no dependency on `Toolbox.EventLog` or `Toolbox.HTML`.
+the summary e-mail are done by the module's own helper functions in `Private`,
+so no other module is needed.
 
 ### Usage
 
@@ -86,13 +94,17 @@ file, then run the entrypoint:
 pwsh.exe -Command "& '.\Scripts\Entrypoints\ConvertXmlToExcel.ps1' -ConfigurationJsonFile 'C:\MyConfig.json'; exit `$LASTEXITCODE"
 ```
 
-One scheduled task per type, each with its own configuration file, XML folder and
-Excel folder.
+Use one scheduled task per type, each with its own configuration file, XML
+folder and Excel folder.
+
+The exit code is `1` when a fatal error occurred, `0` otherwise. Warnings, such
+as a single XML file that could not be read, do not fail the run: the other
+files are still converted and the problem is reported in the e-mail and the log.
 
 ## 📁 Layout
 
 ```
-CA-CP-convert-XML-file-to-Excel/
+CA-CP-convert-XML-to-Excel/
 ├── Examples/                       Configuration templates (Batch, Alarm, Sequence)
 ├── Modules/
 │   └── ConvertXmlToExcel/
@@ -104,7 +116,7 @@ CA-CP-convert-XML-file-to-Excel/
 │                                     ExcelWorkbook.ps1       open, fill, format the workbooks
 │                                     XmlRow.ps1              turn XML nodes into rows
 │                                     WorksheetDefinition.ps1 worksheets, headers, colors
-│                                     ErrorHandling.ps1       Add-ErrorHC
+│                                     ErrorHandling.ps1       collect errors without throwing
 │                                     Utils.ps1               ENV: values, dated log folder
 │                                     Logging.ps1             log files and Windows event log
 │                                     Mail.ps1                MailKit send, save body to log
@@ -119,8 +131,8 @@ CA-CP-convert-XML-file-to-Excel/
 └── README.MD
 ```
 
-The operation scripts under `Scripts/Operations` are invoked by path, possibly
-in a parallel runspace, so they dot-source the module's private helpers directly
+The scripts under `Scripts/Operations` are invoked by path and can run in a
+parallel runspace, so they dot-source the module's private helpers directly
 rather than relying on the module's exports.
 
 ## ⚙️ Configuration
@@ -140,17 +152,33 @@ The file has two halves:
   the dated log folder goes and how long logs are kept) and `SaveInEventLog`
   (whether and where to write Windows event log entries).
 
-Changes compared with the old scripts:
+A few values are worth calling out:
 
-- **`Type`** added — one of `Batch`, `Alarm` or `Sequence`.
-- **`MaxConcurrentJobs.GetXmlFileLoadingDate`** / `.GetAlarmRaisedDate` /
-  `.GetXmlFileCreationDate` are replaced by a single
-  **`MaxConcurrentJobs.GetXmlFileDates`**.
-- **`SendMail`** moved under **`Settings`** and gained `From`, `Smtp` and
-  `AssemblyPath`, because mail is no longer sent by an internal module.
+- **`ExcelFileName`** must contain the placeholder `{0}`, which is replaced by
+  the month (for example `202408 August`), and must end with `.xlsx`. Changing
+  it once Excel files exist starts new workbooks instead of appending to the
+  existing ones.
+- **`MaxConcurrentJobs.CreateExcelFile`** should stay at `1` unless every month
+  writes to its own Excel file. Two jobs writing the same workbook at the same
+  time corrupt it.
+- **`SendMail.When`** accepts `Never`, `Always`, `OnlyOnError` or
+  `OnlyOnErrorOrAction`.
 
-`ExcelFileName` and the worksheet and table names are unchanged, so the tool
-keeps appending to the Excel files created by the previous version.
+## 📄 Logging
+
+Each run creates a dated sub folder inside `Settings.SaveLogFiles.Where.Folder`
+containing:
+
+| File                | Contents                                              |
+| ------------------- | ----------------------------------------------------- |
+| `Overview.xlsx`     | One row per XML file per month, with the rows added    |
+| `NotArchived.xlsx`  | Files left behind, with the reason                     |
+| `Errors.json`       | The errors of the run                                 |
+| `Mail - ....html`   | A copy of the summary e-mail                          |
+
+`NotArchived.xlsx` and `Errors.json` are only written when there is something to
+report. Log folders older than `SaveLogFiles.DeleteLogsAfterDays` are removed at
+the end of a run.
 
 ## 🧪 Tests
 
@@ -158,8 +186,8 @@ keeps appending to the Excel files created by the previous version.
 Invoke-Pester -Path .\Tests
 ```
 
-See **`Tests/README.md`** for the layout and conventions. The integration test
-proves the fanout end to end: one XML file with deliveries in two months
+See **`Tests/README.md`** for the layout and conventions. `Fanout.Tests.ps1`
+covers the behaviour end to end: one XML file with deliveries in two months
 produces two Excel files, each holding its own delivery, and a second run adds
 nothing.
 
