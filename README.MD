@@ -50,6 +50,22 @@ is and is listed in the summary e-mail under **"XML files NOT archived, manual
 action required"**, so the problem can be investigated and the file picked up
 again on the next run.
 
+### The same file name delivered twice
+
+An XML file keeps its name when it is archived, so a file delivered a second
+time collides with the copy already there. What happens then depends on the
+content, not on the name:
+
+- **Same content** — the file was simply delivered twice and nothing was lost,
+  because its data is already in the Excel file. It is archived as
+  `Duplicate_<yyyyMMdd_HHmmss>_<name>.xml`, so the archive never overwrites an
+  older copy.
+- **Different content** — a different file that happens to share a name. Its
+  records were *not* added to the Excel file, because a file is recognized by
+  its name and that name was already present. The file stays where it is and is
+  reported for a manual action, because overwriting the archived copy would
+  destroy the only proof of what changed.
+
 ### An XML file is never added twice
 
 An XML file is added to an Excel file completely or not at all, so the file name
@@ -169,16 +185,19 @@ A few values are worth calling out:
 Each run creates a dated sub folder inside `Settings.SaveLogFiles.Where.Folder`
 containing:
 
-| File                | Contents                                              |
-| ------------------- | ----------------------------------------------------- |
-| `Overview.xlsx`     | One row per XML file per month, with the rows added    |
-| `NotArchived.xlsx`  | Files left behind, with the reason                     |
-| `Errors.json`       | The errors of the run                                 |
-| `Mail - ....html`   | A copy of the summary e-mail                          |
+| File              | Contents                                                    |
+| ----------------- | ----------------------------------------------------------- |
+| `Overview.xlsx`   | One row per XML file per month, including its error, if any |
+| `Errors.json`     | The errors of the run                                       |
+| `Mail - ....html` | A copy of the summary e-mail                                |
 
-`NotArchived.xlsx` and `Errors.json` are only written when there is something to
-report. Log folders older than `SaveLogFiles.DeleteLogsAfterDays` are removed at
-the end of a run.
+`Overview.xlsx` has an `Error` column holding whatever went wrong for that row —
+reading the date, writing to Excel or archiving — so a problem is always on the
+line of the file it belongs to. Its `Archived` column shows `Yes`, `No`, or the
+name the file received when it was archived as a duplicate.
+
+`Errors.json` is only written when there is something to report. Log folders
+older than `SaveLogFiles.DeleteLogsAfterDays` are removed at the end of a run.
 
 ## 🧪 Tests
 

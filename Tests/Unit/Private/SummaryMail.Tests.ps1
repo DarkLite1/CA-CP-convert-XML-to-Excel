@@ -10,11 +10,11 @@ BeforeAll {
     function New-CountHC {
         param (
             $Total = 0, $Added = 0, $Already = 0, $FanOut = 0,
-            $Archived = 0, $NotArchived = 0, $Errors = 0
+            $Archived = 0, $Duplicates = 0, $NotArchived = 0, $Errors = 0
         )
         @{
             TotalXmlFiles = $Total; Added = $Added; AlreadyInSheet = $Already
-            FanOut = $FanOut; Archived = $Archived
+            FanOut = $FanOut; Archived = $Archived; Duplicates = $Duplicates
             NotArchived = $NotArchived; Errors = $Errors
         }
     }
@@ -134,12 +134,30 @@ Describe 'New-SummaryMailHC' {
             $body | Should-MatchString 'Added to Excel'
         }
 
-        It 'hides a total that is zero' {
+        It 'hides an optional total that is zero' {
             $body = (New-SummaryMailHC -Count (New-CountHC -Total 2 -Added 2) `
                     -Collection $emptyCollection -Type 'Batch' -Path $path).Body
 
             $body.Contains('Already in Excel') | Should-BeFalse
-            $body.Contains('Errors') | Should-BeFalse
+            $body.Contains('Archived as duplicate') | Should-BeFalse
+            $body.Contains('NOT archived') | Should-BeFalse
+        }
+
+        It 'always shows the error count, also when it is zero' {
+            <#
+                A missing line reads as 'not reported' rather than as 'none'.
+            #>
+            $body = (New-SummaryMailHC -Count (New-CountHC -Total 2 -Added 2) `
+                    -Collection $emptyCollection -Type 'Batch' -Path $path).Body
+
+            $body | Should-MatchString 'Errors'
+        }
+
+        It 'reports the files archived as a duplicate' {
+            $body = (New-SummaryMailHC -Count (New-CountHC -Total 2 -Already 2 -Duplicates 2) `
+                    -Collection $emptyCollection -Type 'Batch' -Path $path).Body
+
+            $body | Should-MatchString 'Archived as duplicate'
         }
 
         It 'shows the errors and the not archived quantity when there are any' {

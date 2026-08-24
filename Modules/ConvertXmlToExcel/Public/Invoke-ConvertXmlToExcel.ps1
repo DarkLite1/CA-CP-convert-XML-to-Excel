@@ -83,7 +83,14 @@ function Invoke-ConvertXmlToExcel {
         FanOut         = @()
         Archived       = @()
         NotArchived    = @()
+        Duplicates     = @()
     }
+
+    <#
+        The archive result per XML file name, so the log file can show what
+        happened to each file in its own row.
+    #>
+    $archiveOutcome = @{}
 
     try {
         #region Import the configuration file
@@ -383,29 +390,38 @@ function Invoke-ConvertXmlToExcel {
                     Reason = $reason
                 }
 
+                $archiveOutcome[$fileName] = @{ Archived = $false; Reason = $reason }
+
                 Write-Warning "File '$fileName' not archived: $reason"
 
                 Continue
             }
 
             #region Move the file to the archive folder
-            try {
-                $null = New-Item -Path $archiveFolder -ItemType Directory -EA Ignore
+            $moveResult = Move-ToArchiveFolderHC -File $fileDate.File `
+                -ArchiveFolder $archiveFolder -ScriptStartTime $scriptStartTime
 
-                if (Test-Path -LiteralPath $fileDate.File.FullName -PathType Leaf) {
-                    Write-Verbose "Move file '$fileName' to '$archiveFolder'"
+            $archiveOutcome[$fileName] = $moveResult
 
-                    Move-Item -LiteralPath $fileDate.File.FullName -Destination $archiveFolder -EA Stop
-                }
-
+            if ($moveResult.Archived) {
                 $collection.Archived += $fileDate.File
+
+                if ($moveResult.IsDuplicate) {
+                    $collection.Duplicates += [PSCustomObject]@{
+                        File       = $fileDate.File
+                        ArchivedAs = $moveResult.ArchivedAs
+                    }
+
+                    Write-Verbose "File '$fileName' archived as duplicate '$($moveResult.ArchivedAs)'"
+                }
             }
-            catch {
+            else {
                 $collection.NotArchived += [PSCustomObject]@{
                     File   = $fileDate.File
-                    Reason = "Failed moving file to archive folder '$archiveFolder': $_"
+                    Reason = $moveResult.Reason
                 }
-                if ($Error.Count) { $Error.RemoveAt(0) }
+
+                Write-Warning "File '$fileName' not archived: $($moveResult.Reason)"
             }
             #endregion
         }
@@ -437,6 +453,17 @@ function Invoke-ConvertXmlToExcel {
             -Message "File '$($result.File.Name)' month '$($result.MonthKey)': $($result.Error)" `
             -Category 'Export' -SystemErrors $SystemErrors
     }
+
+    <#
+        A file that stays behind always needs a manual action, so it counts as
+        an error. Without this the mail could report zero errors while files
+        were piling up in the input folder.
+    #>
+    foreach ($item in $collection.NotArchived) {
+        Add-ErrorHC -Type 'Warning' -Name 'Not archived' `
+            -Message "File '$($item.File.Name)': $($item.Reason)" `
+            -Category 'Archive' -SystemErrors $SystemErrors
+    }
     #endregion
 
     #region Count
@@ -454,34 +481,87 @@ function Invoke-ConvertXmlToExcel {
         AlreadyInSheet = @($collection.AlreadyInSheet.File.Name | Sort-Object -Unique).Count
         FanOut         = $collection.FanOut.Count
         Archived       = $collection.Archived.Count
+        Duplicates     = $collection.Duplicates.Count
         NotArchived    = $collection.NotArchived.Count
         Errors         = $SystemErrors.Value.Count
+    }
+    #endregion
+
+    #region Build the overview
+    <#
+        One row per XML file per month, plus a row for a file that never got as
+        far as an Excel file. The Error column holds whatever went wrong for
+        that row: reading the date, writing to Excel, or archiving. That way a
+        problem is always on the line of the file it belongs to, instead of in
+        a separate sheet that has to be matched up by hand.
+    #>
+    $overview = [System.Collections.Generic.List[Object]]::new()
+
+    foreach ($fileDate in $fileDates) {
+        $fileName = $fileDate.File.Name
+
+        $archive = $archiveOutcome[$fileName]
+
+        $archivedAs = if ($archive -and $archive.Archived) {
+            if ($archive.ArchivedAs -ne $fileName) { $archive.ArchivedAs } else { 'Yes' }
+        }
+        else { 'No' }
+
+        $archiveError = if ($archive -and (-not $archive.Archived)) { $archive.Reason }
+
+        $fileResults = @($collection.Results.where({ $_.File.Name -eq $fileName }))
+
+        if (-not $fileResults) {
+            #region The file never reached an Excel file
+            $overview.Add(
+                [PSCustomObject]@{
+                    DateTime       = $scriptStartTime
+                    File           = $fileName
+                    MonthKey       = $null
+                    ExcelFile      = $null
+                    AlreadyInSheet = $false
+                    AddedToSheet   = $false
+                    RowsAdded      = 0
+                    Archived       = $archivedAs
+                    Error          = @(
+                        $(if ($fileDate.Error) { "No date could be read from the XML file: $($fileDate.Error)" })
+                        $archiveError
+                    ).where({ $_ }) -join ' | '
+                }
+            )
+            #endregion
+
+            Continue
+        }
+
+        foreach ($result in $fileResults) {
+            $overview.Add(
+                [PSCustomObject]@{
+                    DateTime       = $result.DateTime
+                    File           = $fileName
+                    MonthKey       = $result.MonthKey
+                    ExcelFile      = $(if ($result.ExcelFilePath) { Split-Path $result.ExcelFilePath -Leaf })
+                    AlreadyInSheet = $result.AlreadyInSheet
+                    AddedToSheet   = $result.AddedToSheet
+                    RowsAdded      = $result.RowsAdded
+                    Archived       = $archivedAs
+                    Error          = @(
+                        $result.Error
+                        $archiveError
+                    ).where({ $_ }) -join ' | '
+                }
+            )
+        }
     }
     #endregion
 
     #region Write the log files
     if ($datedLogFolder) {
         try {
-            if ($collection.Results) {
+            if ($overview) {
                 $logFileAttachments += Out-LogFileHC `
-                    -DataToExport (
-                        $collection.Results | Select-Object -Property DateTime,
-                        ExcelFilePath, MonthKey,
-                        @{ Name = 'File'; Expression = { $_.File.Name } },
-                        AlreadyInSheet, AddedToSheet, RowsAdded, Error
-                    ) `
+                    -DataToExport $overview `
                     -PartialPath (Join-Path $datedLogFolder 'Overview') `
-                    -FileExtensions '.xlsx'
-            }
-
-            if ($collection.NotArchived) {
-                $logFileAttachments += Out-LogFileHC `
-                    -DataToExport (
-                        $collection.NotArchived | Select-Object -Property @{
-                            Name = 'File'; Expression = { $_.File.FullName }
-                        }, Reason
-                    ) `
-                    -PartialPath (Join-Path $datedLogFolder 'NotArchived') `
                     -FileExtensions '.xlsx'
             }
 

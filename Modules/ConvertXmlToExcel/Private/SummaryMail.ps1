@@ -169,12 +169,22 @@ function New-SummaryMailHC {
 
     $totals.Add(@{ Name = 'Moved to the archive folder'; Value = $Count.Archived })
 
+    if ($Count.Duplicates) {
+        $totals.Add(@{
+                Name  = 'Archived as duplicate, already in Excel'
+                Value = $Count.Duplicates
+            })
+    }
     if ($Count.NotArchived) {
         $totals.Add(@{ Name = 'NOT archived'; Value = $Count.NotArchived })
     }
-    if ($Count.Errors) {
-        $totals.Add(@{ Name = 'Errors'; Value = $Count.Errors })
-    }
+
+    <#
+        Always shown, also when it is zero: a missing line reads as 'not
+        reported' rather than as 'none', and the quantity of errors is the first
+        thing looked for in this mail.
+    #>
+    $totals.Add(@{ Name = 'Errors'; Value = $Count.Errors })
 
     $null = $body.Append(
         "<p style='$cellStyle'><b>Summary</b></p>" +
@@ -182,7 +192,9 @@ function New-SummaryMailHC {
     )
 
     foreach ($total in $totals) {
-        $highlight = if ($total.Name -match 'NOT archived|Errors') {
+        $highlight = if (
+            ($total.Name -match 'NOT archived|Errors') -and ($total.Value -gt 0)
+        ) {
             " bgcolor='#fee2e2'"
         }
 
