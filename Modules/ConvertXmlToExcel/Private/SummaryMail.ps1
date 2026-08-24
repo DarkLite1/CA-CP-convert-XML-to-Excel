@@ -5,9 +5,12 @@
         Build the subject and HTML body of the summary e-mail.
 
     .DESCRIPTION
-        The Permission-matrix HTML builders are specific to permission matrices,
-        so the body for this script is built here. Plain table based HTML with
-        inline styles, so it renders the same in Outlook and in a browser.
+        The HTML is deliberately old fashioned: tables with the 'border',
+        'cellpadding' and 'cellspacing' attributes, inline styles on every cell
+        and no CSS classes, no stylesheet and no layout that depends on float,
+        flex or grid. The classic Outlook client renders HTML with the Word
+        engine, which ignores most of that. Everything below is what the Word
+        engine does support.
 #>
 
 function New-SummaryMailHC {
@@ -16,11 +19,13 @@ function New-SummaryMailHC {
             Build the subject line and HTML body for the summary e-mail.
 
         .DESCRIPTION
-            Summarizes one run: how many XML files were found, how many were
-            added to which Excel file, how many spanned more than one month, how
-            many were already present, and how many were archived. Files that
-            could not be archived are highlighted, because they need a manual
-            action before the next run.
+            The body opens with the Excel files that were written, most recent
+            month first, so the newest work is visible without scrolling. The
+            totals follow at the bottom, because they are a conclusion rather
+            than something to read past on the way to the detail.
+
+            Files that could not be archived are listed with their reason,
+            because they need a manual action before the next run.
 
         .PARAMETER Count
             The hashtable of counters built by Invoke-ConvertXmlToExcel.
@@ -32,8 +37,8 @@ function New-SummaryMailHC {
             'Batch', 'Alarm' or 'Sequence', named in the intro line.
 
         .PARAMETER Path
-            Hashtable with the 'XmlFiles' and 'ExcelFiles' folders, linked in
-            the body so they can be opened from the mail.
+            Hashtable with the 'XmlFiles' and 'ExcelFiles' folders, linked at
+            the bottom so they can be opened from the mail.
 
         .OUTPUTS
             A hashtable with the keys 'Subject' and 'Body'.
@@ -49,6 +54,13 @@ function New-SummaryMailHC {
         [Parameter(Mandatory)]
         [HashTable]$Path
     )
+
+    #region Styles reused by every table
+    $tableStyle = 'border-collapse:collapse;font-family:Segoe UI,Arial,sans-serif;font-size:10pt;'
+    $headerStyle = 'background-color:#f2f2f2;font-weight:bold;text-align:left;'
+    $cellStyle = 'font-family:Segoe UI,Arial,sans-serif;font-size:10pt;'
+    $numberStyle = "$cellStyle text-align:right;"
+    #endregion
 
     #region Subject
     $subjectParts = @(
@@ -68,93 +80,133 @@ function New-SummaryMailHC {
     $subject = $subjectParts -join ', '
     #endregion
 
-    #region Rows
-    $rows = [System.Text.StringBuilder]::new()
+    $body = [System.Text.StringBuilder]::new()
 
-    $null = $rows.Append(
-        ('<tr><td>{0}</td><td>Total XML file{1}</td></tr>' -f
-        $Count.TotalXmlFiles, $(if ($Count.TotalXmlFiles -ne 1) { 's' }))
+    $null = $body.Append(
+        ("<p style='$cellStyle'>Summary of the XML to Excel conversion (type '{0}'):</p>" -f $Type)
     )
 
-    if ($Count.Added) {
-        $perFile = (
-            $Collection.Added | Group-Object 'ExcelFilePath' | ForEach-Object {
-                '<br>- {0}: {1}' -f $_.Count, (Split-Path $_.Name -Leaf)
+    #region Excel files, most recent month first
+    if ($Collection.Added) {
+        <#
+            Grouped per Excel file, so one row per workbook instead of one row
+            per XML file. The month key starts with 'yyyyMM', so sorting the key
+            descending puts the most recent month on top.
+        #>
+        $perExcelFile = $Collection.Added | Group-Object 'ExcelFilePath' |
+        ForEach-Object {
+            [PSCustomObject]@{
+                MonthKey  = @($_.Group.MonthKey)[0]
+                ExcelFile = Split-Path $_.Name -Leaf
+                XmlFiles  = $_.Count
+                Rows      = ($_.Group | Measure-Object -Property 'RowsAdded' -Sum).Sum
             }
-        ) -join ''
+        } | Sort-Object 'MonthKey' -Descending
 
-        $null = $rows.Append(
-            ('<tr><td>{0}</td><td>XML file{1} added to Excel:{2}</td></tr>' -f
-            $Count.Added, $(if ($Count.Added -ne 1) { 's' }), $perFile)
+        $null = $body.Append(
+            "<table border='1' cellpadding='5' cellspacing='0' style='$tableStyle'>" +
+            "<tr>" +
+            "<th style='$cellStyle$headerStyle'>Month</th>" +
+            "<th style='$cellStyle$headerStyle'>Excel file</th>" +
+            "<th style='$cellStyle$headerStyle'>XML files</th>" +
+            "<th style='$cellStyle$headerStyle'>Rows</th>" +
+            "</tr>"
         )
+
+        foreach ($row in $perExcelFile) {
+            $null = $body.Append(
+                ("<tr><td style='$cellStyle'>{0}</td><td style='$cellStyle'>{1}</td><td style='$numberStyle'>{2}</td><td style='$numberStyle'>{3}</td></tr>" -f
+                $row.MonthKey, $row.ExcelFile, $row.XmlFiles, $row.Rows)
+            )
+        }
+
+        $null = $body.Append('</table>')
     }
-
-    if ($Count.FanOut) {
-        $null = $rows.Append(
-            ('<tr><td>{0}</td><td>XML file{1} with records in more than one month, written to more than one Excel file</td></tr>' -f
-            $Count.FanOut, $(if ($Count.FanOut -ne 1) { 's' }))
-        )
-    }
-
-    if ($Count.AlreadyInSheet) {
-        $null = $rows.Append(
-            ('<tr><td>{0}</td><td>XML file{1} already in Excel</td></tr>' -f
-            $Count.AlreadyInSheet, $(if ($Count.AlreadyInSheet -ne 1) { 's' }))
-        )
-    }
-
-    if ($Count.Archived) {
-        $null = $rows.Append(
-            ('<tr><td>{0}</td><td>XML file{1} moved to the archive folder</td></tr>' -f
-            $Count.Archived, $(if ($Count.Archived -ne 1) { 's' }))
-        )
-    }
-
-    if ($Count.NotArchived) {
-        $detail = (
-            $Collection.NotArchived | ForEach-Object {
-                '<br>- {0}: {1}' -f $_.File.Name, $_.Reason
-            }
-        ) -join ''
-
-        $null = $rows.Append(
-            ('<tr style="background-color:#fee2e2"><td>{0}</td><td><b>XML file{1} NOT archived, manual action required:</b>{2}</td></tr>' -f
-            $Count.NotArchived, $(if ($Count.NotArchived -ne 1) { 's' }), $detail)
-        )
-    }
-
-    if ($Count.Errors) {
-        $null = $rows.Append(
-            ('<tr style="background-color:#fee2e2"><td>{0}</td><td>Error{1}, see the attached log file for the details</td></tr>' -f
-            $Count.Errors, $(if ($Count.Errors -ne 1) { 's' }))
+    else {
+        $null = $body.Append(
+            "<p style='$cellStyle'>No XML file was added to an Excel file.</p>"
         )
     }
     #endregion
 
-    $body = @"
-<p>Summary of the XML to Excel conversion (type '$Type'):</p>
-<table style="border-collapse:collapse;font-family:Segoe UI,Arial,sans-serif;">
-    <tr>
-        <th style="text-align:left;padding:4px 8px;">Quantity</th>
-        <th style="text-align:left;padding:4px 8px;">Description</th>
-    </tr>
-    $($rows.ToString())
-</table>
-<p>Folder locations:</p>
-<table style="border-collapse:collapse;font-family:Segoe UI,Arial,sans-serif;">
-    <tr>
-        <th style="text-align:left;padding:4px 8px;">XML files</th>
-        <td style="padding:4px 8px;"><a href="$($Path.XmlFiles)">$($Path.XmlFiles)</a></td>
-    </tr>
-    <tr>
-        <th style="text-align:left;padding:4px 8px;">Excel files</th>
-        <td style="padding:4px 8px;"><a href="$($Path.ExcelFiles)">$($Path.ExcelFiles)</a></td>
-    </tr>
-</table>
-"@
+    #region Files that need a manual action
+    if ($Collection.NotArchived) {
+        $null = $body.Append(
+            "<p style='$cellStyle'><b>XML files NOT archived, manual action required:</b></p>" +
+            "<table border='1' cellpadding='5' cellspacing='0' style='$tableStyle'>" +
+            "<tr>" +
+            "<th style='$cellStyle$headerStyle'>XML file</th>" +
+            "<th style='$cellStyle$headerStyle'>Reason</th>" +
+            "</tr>"
+        )
+
+        foreach ($item in $Collection.NotArchived) {
+            $null = $body.Append(
+                ("<tr><td style='$cellStyle' bgcolor='#fee2e2'>{0}</td><td style='$cellStyle' bgcolor='#fee2e2'>{1}</td></tr>" -f
+                $item.File.Name, $item.Reason)
+            )
+        }
+
+        $null = $body.Append('</table>')
+    }
+    #endregion
+
+    #region Totals, after the detail
+    $totals = [System.Collections.Generic.List[Object]]::new()
+
+    $totals.Add(@{ Name = 'Total XML files'; Value = $Count.TotalXmlFiles })
+    $totals.Add(@{ Name = 'Added to Excel'; Value = $Count.Added })
+
+    if ($Count.AlreadyInSheet) {
+        $totals.Add(@{ Name = 'Already in Excel'; Value = $Count.AlreadyInSheet })
+    }
+    if ($Count.FanOut) {
+        $totals.Add(@{
+                Name  = 'Spread over more than one month'
+                Value = $Count.FanOut
+            })
+    }
+
+    $totals.Add(@{ Name = 'Moved to the archive folder'; Value = $Count.Archived })
+
+    if ($Count.NotArchived) {
+        $totals.Add(@{ Name = 'NOT archived'; Value = $Count.NotArchived })
+    }
+    if ($Count.Errors) {
+        $totals.Add(@{ Name = 'Errors'; Value = $Count.Errors })
+    }
+
+    $null = $body.Append(
+        "<p style='$cellStyle'><b>Summary</b></p>" +
+        "<table border='1' cellpadding='5' cellspacing='0' style='$tableStyle'>"
+    )
+
+    foreach ($total in $totals) {
+        $highlight = if ($total.Name -match 'NOT archived|Errors') {
+            " bgcolor='#fee2e2'"
+        }
+
+        $null = $body.Append(
+            ("<tr><td style='$cellStyle$headerStyle'$highlight>{0}</td><td style='$numberStyle'$highlight>{1}</td></tr>" -f
+            $total.Name, $total.Value)
+        )
+    }
+
+    $null = $body.Append('</table>')
+    #endregion
+
+    #region Folders
+    $null = $body.Append(
+        "<p style='$cellStyle'>Folders:</p>" +
+        "<table border='1' cellpadding='5' cellspacing='0' style='$tableStyle'>" +
+        ("<tr><td style='$cellStyle$headerStyle'>XML files</td><td style='$cellStyle'><a href='{0}'>{0}</a></td></tr>" -f $Path.XmlFiles) +
+        ("<tr><td style='$cellStyle$headerStyle'>Excel files</td><td style='$cellStyle'><a href='{0}'>{0}</a></td></tr>" -f $Path.ExcelFiles) +
+        '</table>'
+    )
+    #endregion
 
     @{
         Subject = $subject
-        Body    = $body
+        Body    = $body.ToString()
     }
 }

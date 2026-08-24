@@ -443,8 +443,15 @@ function Invoke-ConvertXmlToExcel {
     $count = @{
         TotalXmlFiles  = $xmlFiles.Count
         TotalExcelFile = $groups.Count
-        Added          = $collection.Added.Count
-        AlreadyInSheet = $collection.AlreadyInSheet.Count
+        <#
+            Counted per XML file, not per result. A file that holds records of
+            two months produces two results, but it is still one file, so
+            'Added' must never be higher than 'TotalXmlFiles'. The quantity per
+            Excel file is shown in the mail, where the total per workbook does
+            add up to more than the quantity of files.
+        #>
+        Added          = @($collection.Added.File.Name | Sort-Object -Unique).Count
+        AlreadyInSheet = @($collection.AlreadyInSheet.File.Name | Sort-Object -Unique).Count
         FanOut         = $collection.FanOut.Count
         Archived       = $collection.Archived.Count
         NotArchived    = $collection.NotArchived.Count

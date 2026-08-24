@@ -125,6 +125,38 @@ function Get-StringOrDefaultHC {
 }
 
 function Get-DatedLogFolderPathHC {
+    <#
+        .SYNOPSIS
+            Create the log folder for one run and return its path.
+
+        .DESCRIPTION
+            Creates a folder per script, holding one folder per run:
+
+                <LogFolder>\<JsonFileName>\<yyyy_MM_dd_HHmmss>\
+
+            Grouping by script name first keeps the runs of each script
+            together, so a log folder shared by more than one script stays
+            readable and the runs of one script sort chronologically next to
+            each other.
+
+            When the folder cannot be created the plain LogFolder is returned,
+            so a permission problem never stops the run.
+
+        .PARAMETER LogFolder
+            The root folder for all log files.
+
+        .PARAMETER ScriptStartTime
+            Start time of the run, used for the name of the run folder.
+
+        .PARAMETER JsonFileName
+            Name of the script, used for the name of the script folder.
+
+        .EXAMPLE
+            Get-DatedLogFolderPathHC -LogFolder 'C:\Logs' `
+                -ScriptStartTime (Get-Date) -JsonFileName 'CP Alarm'
+
+            # C:\Logs\CP Alarm\2026_08_24_095748
+    #>
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)][string]$LogFolder,
@@ -133,16 +165,17 @@ function Get-DatedLogFolderPathHC {
     )
 
     try {
-        $datedLogFolder = Join-Path -Path $LogFolder -ChildPath (
-            '{0:0000}_{1:00}_{2:00}_{3:00}{4:00}{5:00} ({6})' -f 
-            $ScriptStartTime.Year,
-            $ScriptStartTime.Month,
-            $ScriptStartTime.Day,
-            $ScriptStartTime.Hour,
-            $ScriptStartTime.Minute,
-            $ScriptStartTime.Second,
-            $JsonFileName
-        )
+        $runFolderName = '{0:0000}_{1:00}_{2:00}_{3:00}{4:00}{5:00}' -f
+        $ScriptStartTime.Year,
+        $ScriptStartTime.Month,
+        $ScriptStartTime.Day,
+        $ScriptStartTime.Hour,
+        $ScriptStartTime.Minute,
+        $ScriptStartTime.Second
+
+        $datedLogFolder = Join-Path -Path (
+            Join-Path -Path $LogFolder -ChildPath $JsonFileName
+        ) -ChildPath $runFolderName
 
         return (New-Item -ItemType 'Directory' -Path $datedLogFolder -Force -EA Stop).FullName
     }
@@ -195,4 +228,3 @@ function Remove-BlankValueHC {
 
     $clean
 }
-

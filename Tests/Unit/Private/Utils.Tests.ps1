@@ -88,10 +88,38 @@ Describe 'Get-DatedLogFolderPathHC' {
         Test-Path -Path $result | Should-BeTrue
     }
 
-    It 'names the folder yyyy_MM_dd_HHmmss (name)' {
+    It 'names the run folder yyyy_MM_dd_HHmmss' {
         $result = Get-DatedLogFolderPathHC -LogFolder 'TestDrive:\Logs' `
             -ScriptStartTime $startTime -JsonFileName 'CP Batch'
 
-        Split-Path -Path $result -Leaf | Should-Be '2024_03_07_090508 (CP Batch)'
+        Split-Path -Path $result -Leaf | Should-Be '2024_03_07_090508'
+    }
+
+    It 'puts the run folder inside a folder named after the script' {
+        $result = Get-DatedLogFolderPathHC -LogFolder 'TestDrive:\Logs' `
+            -ScriptStartTime $startTime -JsonFileName 'CP Batch'
+
+        Split-Path (Split-Path $result -Parent) -Leaf | Should-Be 'CP Batch'
+    }
+
+    It 'keeps the runs of two scripts apart' {
+        $batch = Get-DatedLogFolderPathHC -LogFolder 'TestDrive:\Split' `
+            -ScriptStartTime $startTime -JsonFileName 'CP Batch'
+        $alarm = Get-DatedLogFolderPathHC -LogFolder 'TestDrive:\Split' `
+            -ScriptStartTime $startTime -JsonFileName 'CP Alarm'
+
+        $batch | Should-NotBe $alarm
+        Split-Path (Split-Path $batch -Parent) -Leaf | Should-Be 'CP Batch'
+        Split-Path (Split-Path $alarm -Parent) -Leaf | Should-Be 'CP Alarm'
+    }
+
+    It 'keeps two runs of the same script in the same script folder' {
+        $first = Get-DatedLogFolderPathHC -LogFolder 'TestDrive:\Runs' `
+            -ScriptStartTime $startTime -JsonFileName 'CP Batch'
+        $second = Get-DatedLogFolderPathHC -LogFolder 'TestDrive:\Runs' `
+            -ScriptStartTime $startTime.AddHours(5) -JsonFileName 'CP Batch'
+
+        Split-Path $first -Parent | Should-Be (Split-Path $second -Parent)
+        Split-Path -Path $second -Leaf | Should-Be '2024_03_07_140508'
     }
 }
