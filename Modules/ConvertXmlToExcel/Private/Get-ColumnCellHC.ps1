@@ -38,3 +38,50 @@ function Get-ColumnCellHC {
         '{0}{1}{2}' -f $start, $alphaToZulu[$index], $RowNumber
     }
 }
+
+<#
+    Column letter to column number, remembered after the first conversion.
+
+    A worksheet has at most a few dozen columns but a run writes millions of
+    cells, so every lookup after the first few is a hash hit.
+#>
+$script:ColumnNumberCache = @{}
+
+function Get-ColumnNumberHC {
+    <#
+        .SYNOPSIS
+            Convert a column letter to its column number: A is 1, Z is 26,
+            AA is 27.
+
+        .DESCRIPTION
+            EPPlus can resolve a column letter itself, but only as part of
+            parsing a full cell address like 'AB1234'. Writing a cell by row
+            and column number avoids that parsing, and this is what turns the
+            letters used in the worksheet definitions into numbers.
+
+        .EXAMPLE
+            Get-ColumnNumberHC -ColumnLetter 'AB'   # 28
+    #>
+    param (
+        [Parameter(Mandatory)]
+        [String]$ColumnLetter
+    )
+
+    $columnNumber = $script:ColumnNumberCache[$ColumnLetter]
+
+    if ($columnNumber) { return $columnNumber }
+
+    $columnNumber = 0
+
+    foreach ($letter in $ColumnLetter.ToUpperInvariant().ToCharArray()) {
+        if ($letter -lt 'A' -or $letter -gt 'Z') {
+            throw "Column '$ColumnLetter' is not a valid column letter"
+        }
+
+        $columnNumber = ($columnNumber * 26) + ([int]$letter - 64)
+    }
+
+    $script:ColumnNumberCache[$ColumnLetter] = $columnNumber
+
+    $columnNumber
+}

@@ -304,16 +304,63 @@ function Add-RowToWorkbookHC {
         throw 'XML file could not be added to Excel, max row limit reached'
     }
 
+    <#
+        Column letter to column number, built as the letters are met and reused
+        for every following row. A worksheet has at most a few dozen columns
+        while this call writes every row of an XML file, so after the first row
+        every lookup is a hash hit.
+
+        Kept local on purpose. A script scoped cache would have to be declared
+        in some file, and this function would then quietly stop working when it
+        is loaded on its own, which is exactly what the unit test does.
+    #>
+    $columnNumberByLetter = @{}
+
     foreach ($row in $Rows) {
         $sheet = $Workbook.Sheet[$row.Key]
 
-        $row.Cells.GetEnumerator().ForEach(
-            {
-                $address = '{0}{1}' -f $_.Key, $sheet.RowNumber
+        <#
+            Pulled out of the cell loop. Both were resolved again for every
+            single cell before, and 'Worksheet' is a hash lookup.
+        #>
+        $worksheet = $sheet.Worksheet
+        $rowNumber = $sheet.RowNumber
 
-                $sheet.Worksheet.Cells[$address].Value = $_.Value
+        <#
+            'SetValue' writes straight to the cell store. The previous
+            '$worksheet.Cells[$address].Value = ...' built an address string
+            like 'AB1234', handed it back to EPPlus to be parsed into a row and
+            a column again, and allocated an ExcelRange object to hold the
+            result. That is three throwaway objects per cell, on a worksheet
+            with up to 68 columns, for every row of every file.
+
+            A 'foreach' statement replaces '.GetEnumerator().ForEach({ })'
+            because the method form invokes its script block once per cell,
+            which carries its own per-call cost on this path.
+        #>
+        foreach ($cell in $row.Cells.GetEnumerator()) {
+            $columnLetter = $cell.Key
+
+            $columnNumber = $columnNumberByLetter[$columnLetter]
+
+            if (-not $columnNumber) {
+                #region Column letter to column number: A is 1, Z is 26, AA is 27
+                $columnNumber = 0
+
+                foreach ($letter in [Char[]]$columnLetter.ToUpperInvariant()) {
+                    if ($letter -lt 'A' -or $letter -gt 'Z') {
+                        throw "Column '$columnLetter' is not a valid column letter"
+                    }
+
+                    $columnNumber = ($columnNumber * 26) + ([int]$letter - 64)
+                }
+                #endregion
+
+                $columnNumberByLetter[$columnLetter] = $columnNumber
             }
-        )
+
+            $worksheet.SetValue($rowNumber, $columnNumber, $cell.Value)
+        }
 
         $sheet.RowNumber++
     }
