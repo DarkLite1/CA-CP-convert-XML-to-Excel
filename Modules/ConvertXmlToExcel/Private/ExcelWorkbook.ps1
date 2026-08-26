@@ -16,6 +16,22 @@
 #>
 $script:ExcelMaxRowNumber = 1048576
 
+<#
+    The number format of every date column. Applied once per worksheet at
+    column level by Set-DateColumnFormatHC, not per cell.
+#>
+$script:ExcelDateFormat = 'dd/mm/yyyy hh:mm:ss'
+
+<#
+    How many data rows the column auto sizing looks at. Auto sizing measures
+    the rendered text of every cell in its range, so letting it loose on a
+    worksheet that grows towards a million rows makes every run slower than the
+    one before it, while re-measuring data that has not changed since it was
+    written. A sample of the first rows gives the same widths in practice at a
+    cost that no longer depends on the size of the workbook.
+#>
+$script:AutoFitSampleRowCount = 200
+
 function Open-ExcelWorkbookHC {
     <#
         .SYNOPSIS
@@ -58,6 +74,14 @@ function Open-ExcelWorkbookHC {
                     Worksheet  = $worksheet
                     RowNumber  = $worksheet.Dimension.End.Row + 1
                 }
+
+                <#
+                    Also applied to a workbook created by an earlier version,
+                    which only had the format on the cells written at the time.
+                    Setting it on the column costs the same on an empty
+                    worksheet as on a full one, so it is done on every open.
+                #>
+                Set-DateColumnFormatHC -Worksheet $worksheet -Definition $definition
             }
         }
         catch {
@@ -115,11 +139,67 @@ function Open-ExcelWorkbookHC {
                 $i++
             }
             #endregion
+
+            Set-DateColumnFormatHC -Worksheet $worksheet -Definition $definition
         }
         #endregion
     }
 
     $workbook
+}
+
+function Set-DateColumnFormatHC {
+    <#
+        .SYNOPSIS
+            Give the date columns of a worksheet their number format.
+
+        .DESCRIPTION
+            The format is set on the COLUMN, not on a range of cells, and only
+            when the workbook is opened.
+
+            Formatting the range 'H3:H<lastRow>' after every write, as was done
+            before, re-styles every row that was already in the workbook, so the
+            cost grows with the workbook and the same historical rows are styled
+            again on every run. A column carries a single style entry, so this
+            costs the same whether the worksheet holds three rows or a million,
+            and rows written later inherit it automatically.
+
+            Rows 1 and 2 hold the headers and are inside the column too, but a
+            date format has no effect on text, so they are unaffected.
+
+        .PARAMETER Worksheet
+            The EPPlus worksheet.
+
+        .PARAMETER Definition
+            The worksheet definition from Get-WorksheetDefinitionHC, holding
+            'DateColumns' as column letters.
+    #>
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory)]
+        $Worksheet,
+        [Parameter(Mandatory)]
+        $Definition
+    )
+
+    if (-not $Definition.DateColumns) { return }
+
+    foreach ($column in $Definition.DateColumns) {
+        try {
+            <#
+                The definition holds column letters and the column indexer
+                needs a number. Letting EPPlus resolve the address keeps the
+                letters in the definition, where they are readable, and keeps
+                a letter to number conversion out of this module.
+            #>
+            $columnNumber = $Worksheet.Cells["${column}1"].Start.Column
+
+            $Worksheet.Column($columnNumber).Style.NumberFormat.Format = $script:ExcelDateFormat
+        }
+        catch {
+            throw "Failed formatting date column '$column' of worksheet '$($Worksheet.Name)': $_"
+        }
+    }
 }
 
 function Get-FileNameInWorkbookHC {
@@ -298,29 +378,12 @@ function Format-ExcelWorkbookHC {
 
                 Write-Verbose "Format worksheet '$sheetName'"
 
-                #region Format dates
-                if ($definition.DateColumns) {
-                    $lastRow = $sheet.Worksheet.Dimension.End.Row
-
-                    <#
-                        Data rows start at row 3. When a worksheet only holds
-                        its header rows (for example a batch with no discharging
-                        operations) there is nothing to format and the range
-                        'H3:H2' would be invalid, so it is skipped.
-                    #>
-                    foreach ($column in $definition.DateColumns) {
-                        if ($lastRow -lt 3) { continue }
-
-                        try {
-                            $range = '{0}3:{0}{1}' -f $column, $lastRow
-                            $sheet.Worksheet.Cells[$range].Style.NumberFormat.Format = 'dd/mm/yyyy hh:mm:ss'
-                        }
-                        catch {
-                            throw "Failed formatting date column in range '$range': $_"
-                        }
-                    }
-                }
-                #endregion
+                <#
+                    The date columns are not formatted here anymore. They get
+                    their number format once per open, at column level, in
+                    Set-DateColumnFormatHC. Rows written in this run inherit it,
+                    so there is nothing left to do per run.
+                #>
 
                 #region Format tables
                 if ($definition.TableName) {
@@ -346,9 +409,27 @@ function Format-ExcelWorkbookHC {
                             Excel file from being saved. If saving would fail
                             here the XML file would not be archived and would be
                             reported as an error every single day.
+
+                            It is limited to the first rows on purpose. Auto
+                            sizing measures the rendered text of every cell in
+                            its range, so running it over the whole worksheet
+                            made every run slower than the one before it, while
+                            re-measuring rows written days ago that have not
+                            changed. The widest values sit in the headers and
+                            the first rows anyway, so a sample gives the same
+                            widths at a cost that no longer grows.
                         #>
                         try {
-                            $table.WorkSheet.Cells.AutoFitColumns()
+                            $lastRow = $sheet.Worksheet.Dimension.End.Row
+                            $lastColumn = $sheet.Worksheet.Dimension.End.Column
+
+                            $sampleLastRow = [Math]::Min(
+                                $lastRow, 2 + $script:AutoFitSampleRowCount
+                            )
+
+                            $sheet.Worksheet.Cells[
+                                1, 1, $sampleLastRow, $lastColumn
+                            ].AutoFitColumns()
                         }
                         catch {
                             Write-Warning "Failed auto sizing the columns of sheet '$sheetName': $_"
