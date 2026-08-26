@@ -41,31 +41,38 @@ function Get-XmlRowHC {
     Set-Alias -Name 'Convert' -Value ConvertTo-CorrectTypeHC
 
     #region Get plantHeader
-    $plantHeader = $Xml.plant.plantHeader |
-    Select-Object -Property country_code, company_code, company_name,
-    plant_code, plant_name
+    <#
+        A PSCustomObject literal instead of 'Select-Object'. Select-Object sets
+        up a full pipeline and invokes a script block for every calculated
+        property of every record it is handed. On the headers built once per
+        file that hardly matters, but the same shape is used per delivery, per
+        batch and per sequence parameter further down, so it is done the same
+        way everywhere to keep the file readable.
+    #>
+    $header = $Xml.plant.plantHeader
+
+    $plantHeader = [PSCustomObject]@{
+        country_code = $header.country_code
+        company_code = $header.company_code
+        company_name = $header.company_name
+        plant_code   = $header.plant_code
+        plant_name   = $header.plant_name
+    }
     #endregion
 
     foreach ($batchComputer in $Xml.plant.batchComputers.batchComputer) {
         #region Get batchComputerHeader
-        $batchComputerHeader = $batchComputer.batchComputerHeader |
-        Select-Object -Property system_type, system_provider, mixer_name,
-        offset,
-        @{
-            Name       = 'system_id'
-            Expression = { Convert $_.system_id }
-        },
-        @{
-            Name       = 'mixer_size'
-            Expression = { Convert $_.mixer_size }
-        },
-        @{
-            Name       = 'extraction_id'
-            Expression = { Convert $_.extraction_id }
-        },
-        @{
-            Name       = 'file_created_on'
-            Expression = { ConvertTo-DateTimeHC $_.file_created_on }
+        $header = $batchComputer.batchComputerHeader
+
+        $batchComputerHeader = [PSCustomObject]@{
+            system_type     = $header.system_type
+            system_provider = $header.system_provider
+            mixer_name      = $header.mixer_name
+            offset          = $header.offset
+            system_id       = Convert $header.system_id
+            mixer_size      = Convert $header.mixer_size
+            extraction_id   = Convert $header.extraction_id
+            file_created_on = ConvertTo-DateTimeHC $header.file_created_on
         }
         #endregion
 
@@ -180,127 +187,76 @@ function Get-BatchRowHC {
         #endregion
 
         #region Get deliveryHeader
-        $deliveryHeader = $delivery.deliveryHeader |
-        Select-Object -Property load_mix_code_version, load_mix_name,
-        load_loading_point, load_qty_unit, load_qty_prod_unit, reuse_qty_unit,
-        load_truck, license_plate, ticket_leading_system,
-        @{
-            Name       = 'load_id_erp'
-            Expression = { Convert $_.load_id_erp }
-        },
-        @{
-            Name       = 'reference_delivery'
-            Expression = { Convert $_.reference_delivery }
-        },
-        @{
-            Name       = 'original_delivery'
-            Expression = { Convert $_.original_delivery }
-        },
-        @{
-            Name       = 'load_id_bcc'
-            Expression = { Convert $_.load_id_bcc }
-        },
-        @{
-            Name       = 'load_order_number'
-            Expression = { Convert $_.load_order_number }
-        },
-        @{
-            Name       = 'load_order_number_item'
-            Expression = { Convert $_.load_order_number_item }
-        },
-        @{
-            Name       = 'load_mix_code'
-            Expression = { Convert $_.load_mix_code }
-        },
-        @{
-            Name       = 'load_qty'
-            Expression = { Convert $_.load_qty }
-        },
-        @{
-            Name       = 'load_qty_erp'
-            Expression = { Convert $_.load_qty_erp }
-        },
-        @{
-            Name       = 'load_qty_prod'
-            Expression = { Convert $_.load_qty_prod }
-        },
-        @{
-            Name       = 'reuse_qty'
-            Expression = { Convert $_.reuse_qty }
-        },
-        @{
-            Name       = 'ticket_id'
-            Expression = { Convert $_.ticket_id }
-        },
-        @{
-            Name       = 'batch_count'
-            Expression = { Convert $_.batch_count }
-        },
-        @{
-            Name       = 'load_end_date'
-            Expression = { ConvertTo-DateTimeHC $_.load_end_date }
-        },
-        @{
-            Name       = 'ticket_time'
-            Expression = { ConvertTo-DateTimeHC $_.ticket_time }
-        }
+        <#
+            Built once per delivery and read again by every batch and every
+            batch item of that delivery, so it stays a cache. Only the way it
+            is built changed: 'Select-Object' invoked a script block for each
+            of the 16 calculated properties, for every delivery in the file.
 
-        $deliveryHeader | Add-Member -NotePropertyName 'load_start_date' -NotePropertyValue $loadStartDate -Force
+            'load_start_date' is set here as a normal property. It was added
+            afterwards with 'Add-Member', which rebuilds the member table of
+            the object, again once per delivery.
+        #>
+        $header = $delivery.deliveryHeader
+
+        $deliveryHeader = [PSCustomObject]@{
+            load_mix_code_version  = $header.load_mix_code_version
+            load_mix_name          = $header.load_mix_name
+            load_loading_point     = $header.load_loading_point
+            load_qty_unit          = $header.load_qty_unit
+            load_qty_prod_unit     = $header.load_qty_prod_unit
+            reuse_qty_unit         = $header.reuse_qty_unit
+            load_truck             = $header.load_truck
+            license_plate          = $header.license_plate
+            ticket_leading_system  = $header.ticket_leading_system
+            load_id_erp            = Convert $header.load_id_erp
+            reference_delivery     = Convert $header.reference_delivery
+            original_delivery      = Convert $header.original_delivery
+            load_id_bcc            = Convert $header.load_id_bcc
+            load_order_number      = Convert $header.load_order_number
+            load_order_number_item = Convert $header.load_order_number_item
+            load_mix_code          = Convert $header.load_mix_code
+            load_qty               = Convert $header.load_qty
+            load_qty_erp           = Convert $header.load_qty_erp
+            load_qty_prod          = Convert $header.load_qty_prod
+            reuse_qty              = Convert $header.reuse_qty
+            ticket_id              = Convert $header.ticket_id
+            batch_count            = Convert $header.batch_count
+            load_end_date          = ConvertTo-DateTimeHC $header.load_end_date
+            ticket_time            = ConvertTo-DateTimeHC $header.ticket_time
+            load_start_date        = $loadStartDate
+        }
         #endregion
 
         foreach ($batch in $delivery.batches.batch) {
             #region Get batchHeader
-            $batchHeader = $batch.batchHeader |
-            Select-Object -Property qty_unit, water_trim_unit, sequence,
-            mixing_time_unit, mixer_power_unit, slump_unit,
-            mixer_discharge_time_unit, dischargingOperationTimes,
-            @{
-                Name       = 'batch_id'
-                Expression = { Convert $_.batch_id }
-            },
-            @{
-                Name       = 'batch_id_nr'
-                Expression = { Convert $_.batch_id_nr }
-            },
-            @{
-                Name       = 'qty'
-                Expression = { Convert $_.qty }
-            },
-            @{
-                Name       = 'water_trim'
-                Expression = { Convert $_.water_trim }
-            },
-            @{
-                Name       = 'manual'
-                Expression = { Convert $_.manual }
-            },
-            @{
-                Name       = 'mixing_time'
-                Expression = { Convert $_.mixing_time }
-            },
-            @{
-                Name       = 'mixer_power'
-                Expression = { Convert $_.mixer_power }
-            },
-            @{
-                Name       = 'slump'
-                Expression = { Convert $_.slump }
-            },
-            @{
-                Name       = 'mixer_discharge_time'
-                Expression = { Convert $_.mixer_discharge_time }
-            },
-            @{
-                Name       = 'start_time'
-                Expression = { ConvertTo-DateTimeHC $_.start_time }
-            },
-            @{
-                Name       = 'end_time'
-                Expression = { ConvertTo-DateTimeHC $_.end_time }
-            },
-            @{
-                Name       = 'aborted'
-                Expression = { Convert $_.batchinformation.aborted }
+            <#
+                Built once per batch and read again by every batch item of that
+                batch, so it stays a cache here too.
+            #>
+            $header = $batch.batchHeader
+
+            $batchHeader = [PSCustomObject]@{
+                qty_unit                  = $header.qty_unit
+                water_trim_unit           = $header.water_trim_unit
+                sequence                  = $header.sequence
+                mixing_time_unit          = $header.mixing_time_unit
+                mixer_power_unit          = $header.mixer_power_unit
+                slump_unit                = $header.slump_unit
+                mixer_discharge_time_unit = $header.mixer_discharge_time_unit
+                dischargingOperationTimes = $header.dischargingOperationTimes
+                batch_id                  = Convert $header.batch_id
+                batch_id_nr               = Convert $header.batch_id_nr
+                qty                       = Convert $header.qty
+                water_trim                = Convert $header.water_trim
+                manual                    = Convert $header.manual
+                mixing_time               = Convert $header.mixing_time
+                mixer_power               = Convert $header.mixer_power
+                slump                     = Convert $header.slump
+                mixer_discharge_time      = Convert $header.mixer_discharge_time
+                start_time                = ConvertTo-DateTimeHC $header.start_time
+                end_time                  = ConvertTo-DateTimeHC $header.end_time
+                aborted                   = Convert $header.batchinformation.aborted
             }
             #endregion
 
@@ -584,23 +540,18 @@ function Get-SequenceRowHC {
         $BatchComputer.sequenceParameters.sequenceParameter
     ) {
         #region Get sequenceParameterHeader
-        $sequenceHeader = $sequenceParameter |
-        Select-Object -Property name, baseName, maxBatchSizeUnit,
-        @{
-            Name       = 'ID'
-            Expression = { Convert $_.ID }
-        },
-        @{
-            Name       = 'NrofSubBatches'
-            Expression = { Convert $_.NrofSubBatches }
-        },
-        @{
-            Name       = 'maxbatchsize'
-            Expression = { Convert $_.maxbatchsize }
-        },
-        @{
-            Name       = 'blocked'
-            Expression = { Convert $_.blocked }
+        <#
+            Read again by every property of every sub batch and every parameter
+            below, so it stays a cache.
+        #>
+        $sequenceHeader = [PSCustomObject]@{
+            name             = $sequenceParameter.name
+            baseName         = $sequenceParameter.baseName
+            maxBatchSizeUnit = $sequenceParameter.maxBatchSizeUnit
+            ID               = Convert $sequenceParameter.ID
+            NrofSubBatches   = Convert $sequenceParameter.NrofSubBatches
+            maxbatchsize     = Convert $sequenceParameter.maxbatchsize
+            blocked          = Convert $sequenceParameter.blocked
         }
         #endregion
 
