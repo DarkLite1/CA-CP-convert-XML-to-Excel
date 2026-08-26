@@ -64,18 +64,36 @@ try {
         The helpers are private to the module, so importing the module would
         not expose them. This script is run by path, possibly in its own
         runspace, so it dot-sources the helper files it needs directly.
+
+        Only the helpers this script actually calls are loaded, not every file
+        in 'Private'. ForEach-Object -Parallel has no per-runspace setup step,
+        so this whole script body runs once per XML file: loading all of them
+        meant parsing every helper file again for every file processed. Worse,
+        'ExcelWorkbook.ps1' carries a '#Requires -Modules ImportExcel', which
+        pulled ImportExcel into runspaces that never write a single cell.
     #>
     $moduleRoot = Split-Path $ModulePath -Parent
 
-    Get-ChildItem -LiteralPath (Join-Path $moduleRoot 'Private') -Filter '*.ps1' -File |
-    ForEach-Object { . $_.FullName }
+    foreach (
+        $helperName in @(
+            'ConvertTo-DateTimeHC'
+            'Get-MonthKeyHC'
+            'Get-XmlFileMonthHC'
+            'Get-XmlPropertyPathHC'
+        )
+    ) {
+        . (Join-Path $moduleRoot "Private\$helperName.ps1")
+    }
     #endregion
 
     Write-Verbose "File '$XmlFile': get dates of type '$Type'"
 
-    $xmlDocument = Get-XmlDocumentHC -Path $XmlFile.FullName
-
-    $dates = Get-XmlFileMonthHC -Xml $xmlDocument -Type $Type
+    <#
+        The file is streamed, not loaded into an XmlDocument. The export step
+        loads the document it needs itself, so building one here only to read
+        one element per record was work thrown away.
+    #>
+    $dates = Get-XmlFileMonthHC -Path $XmlFile.FullName -Type $Type
 
     $result.MonthKeys = $dates.MonthKeys
     $result.RecordCount = $dates.RecordCount

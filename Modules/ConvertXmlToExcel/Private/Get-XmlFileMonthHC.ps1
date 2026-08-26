@@ -22,66 +22,146 @@ function Get-XmlFileMonthHC {
             Records without a usable date are counted in 'RecordsWithoutDate'.
             They are never silently written to an arbitrary Excel file.
 
-        .PARAMETER Xml
-            The XML document, as returned by Get-XmlDocumentHC.
+            The file is read with an XmlReader instead of being loaded into an
+            XmlDocument. Only one element per record is needed here, so there
+            is no reason to build a full document tree in memory first. A
+            reader walks the file forward once, holds a single node at a time
+            and never allocates the tree, which matters for the large files:
+            the old version loaded the whole document, and the export step then
+            loaded the very same file again for every month it found.
+
+            Reading through PowerShell's dotted property access, as in
+            '$Xml.plant.batchComputers.batchComputer.deliveries.delivery', was
+            the other cost. Each step goes through the XmlNode adapter, which
+            builds a member table per node, and the chain materialized every
+            delivery in the file just to reach one child element.
+
+        .PARAMETER Path
+            Full path to the XML file.
 
         .PARAMETER Type
             'Batch', 'Alarm' or 'Sequence'.
 
         .EXAMPLE
-            $xml = Get-XmlDocumentHC -Path 'C:\Data\File.xml'
-            Get-XmlFileMonthHC -Xml $xml -Type 'Batch'
+            Get-XmlFileMonthHC -Path 'C:\Data\File.xml' -Type 'Batch'
     #>
     [CmdletBinding()]
     param (
         [Parameter(Mandatory)]
-        $Xml,
+        [String]$Path,
         [Parameter(Mandatory)]
         [ValidateSet('Batch', 'Alarm', 'Sequence')]
         [String]$Type
     )
 
-    $dates = @()
-    $recordsWithoutDate = 0
-
+    #region The element holding the date, and the element it sits in
+    <#
+        The parent is checked as well so that an element that happens to carry
+        the same name somewhere else in the file cannot be mistaken for a
+        record date. The dotted property access this replaces was anchored to a
+        fixed path and had that guarantee for free.
+    #>
     switch ($Type) {
         'Batch' {
-            $rawDates = @(
-                $Xml.plant.batchComputers.batchComputer.deliveries.delivery.deliveryHeader.load_start_date
-            )
+            $elementName = 'load_start_date'
+            $parentName = 'deliveryHeader'
             break
         }
         'Alarm' {
-            $rawDates = @(
-                $Xml.plant.batchComputers.batchComputer.alarms.alarm.raised
-            )
+            $elementName = 'raised'
+            $parentName = 'alarm'
             break
         }
         'Sequence' {
-            $rawDates = @(
-                $Xml.plant.batchComputers.batchComputer.batchComputerHeader.file_created_on
-            )
+            $elementName = 'file_created_on'
+            $parentName = 'batchComputerHeader'
             break
         }
     }
+    #endregion
 
-    foreach ($rawDate in $rawDates) {
-        $date = ConvertTo-DateTimeHC -Value $rawDate
+    #region Reader settings
+    <#
+        The resolver is disabled and DTDs are refused for the same reason as in
+        Get-XmlDocumentHC: the parser must not reach out to external systems
+        for anything referenced inside the file.
+    #>
+    $readerSettings = [System.Xml.XmlReaderSettings]::new()
+    $readerSettings.DtdProcessing = [System.Xml.DtdProcessing]::Prohibit
+    $readerSettings.XmlResolver = $null
+    $readerSettings.IgnoreWhitespace = $true
+    $readerSettings.IgnoreComments = $true
+    $readerSettings.IgnoreProcessingInstructions = $true
+    #endregion
 
-        if ($date) {
-            $dates += $date
+    $monthKeys = [System.Collections.Generic.HashSet[String]]::new()
+    $recordCount = 0
+    $recordsWithoutDate = 0
+
+    <#
+        The name of the element open at each depth. An element start is always
+        seen before its children, so when the date element is reached the entry
+        one level up holds the name of the element it sits in.
+    #>
+    $elementNameByDepth = [String[]]::new(256)
+
+    $reader = [System.Xml.XmlReader]::Create($Path, $readerSettings)
+
+    try {
+        while (-not $reader.EOF) {
+            if ($reader.NodeType -ne [System.Xml.XmlNodeType]::Element) {
+                $null = $reader.Read()
+                continue
+            }
+
+            $depth = $reader.Depth
+
+            if ($depth -lt $elementNameByDepth.Length) {
+                $elementNameByDepth[$depth] = $reader.LocalName
+            }
+
+            if ($reader.LocalName -ne $elementName) {
+                $null = $reader.Read()
+                continue
+            }
+
+            if (
+                ($depth -eq 0) -or
+                ($elementNameByDepth[$depth - 1] -cne $parentName)
+            ) {
+                $null = $reader.Read()
+                continue
+            }
+
+            $recordCount++
+
+            <#
+                Reads the text and moves the reader past the closing tag on its
+                own, so the loop must not call Read() after it. Doing both
+                would step over the node that follows.
+            #>
+            $rawDate = $reader.ReadElementContentAsString()
+
+            $date = ConvertTo-DateTimeHC -Value $rawDate
+
+            if ($date) {
+                $null = $monthKeys.Add((Get-MonthKeyHC -Date $date))
+            }
+            else {
+                $recordsWithoutDate++
+            }
         }
-        else {
-            $recordsWithoutDate++
-        }
+    }
+    catch {
+        throw "Failed reading XML file '$Path': $_"
+    }
+    finally {
+        $reader.Dispose()
     }
 
     [PSCustomObject]@{
-        MonthKeys          = @(
-            $dates | ForEach-Object { Get-MonthKeyHC -Date $_ } |
-            Sort-Object -Unique
-        )
-        RecordCount        = $rawDates.Count
+        MonthKeys          = @($monthKeys | Sort-Object)
+        RecordCount        = $recordCount
         RecordsWithoutDate = $recordsWithoutDate
     }
 }
