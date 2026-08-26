@@ -38,6 +38,20 @@ orchestrator does, and reads the resulting `.xlsx` files back to prove:
 - a second run adds nothing (the duplicate check works per file per workbook),
 - a month with no records produces no rows.
 
+`Batch.Tests.ps1`, `Alarm.Tests.ps1` and `Sequence.Tests.ps1` run the whole
+orchestrator once per type. They are deliberately the same four scenarios, so a
+difference between the types shows up as a difference in the results and not in
+the way they are tested:
+
+- one file with one record,
+- one file with records in two months, which has to produce two Excel files,
+- the same file delivered twice, archived as a duplicate,
+- a file without a usable date, left behind and reported.
+
+The month is taken from a different place per type: the delivery's
+`load_start_date` for batch, the alarm's `raised` for alarm, and the batch
+computer's `file_created_on` for sequence.
+
 `Overview.Tests.ps1` runs `Invoke-ConvertXmlToExcel` and reads `Overview.xlsx`
 back, covering what happens to a file after conversion:
 
