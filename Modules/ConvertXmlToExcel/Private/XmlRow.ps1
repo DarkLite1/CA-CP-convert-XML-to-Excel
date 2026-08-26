@@ -177,13 +177,23 @@ function Get-BatchRowHC {
 
     Set-Alias -Name 'Convert' -Value ConvertTo-CorrectTypeHC
 
+    <#
+        Worked out once instead of formatting the date of every record into a
+        month key and comparing two strings. 'End' is the first moment of the
+        next month, so the test below is 'at or after Start, before End'.
+    #>
+    $monthRange = Get-MonthRangeHC -MonthKey $MonthKey
+
     foreach ($delivery in $BatchComputer.deliveries.delivery) {
         #region Only deliveries loaded in the requested month
         $loadStartDate = ConvertTo-DateTimeHC $delivery.deliveryHeader.load_start_date
 
         if (-not $loadStartDate) { Continue }
 
-        if ((Get-MonthKeyHC -Date $loadStartDate) -ne $MonthKey) { Continue }
+        if (
+            ($loadStartDate -lt $monthRange.Start) -or
+            ($loadStartDate -ge $monthRange.End)
+        ) { Continue }
         #endregion
 
         #region Get deliveryHeader
@@ -445,13 +455,23 @@ function Get-AlarmRowHC {
 
     Set-Alias -Name 'Convert' -Value ConvertTo-CorrectTypeHC
 
+    <#
+        Worked out once instead of formatting the date of every record into a
+        month key and comparing two strings. 'End' is the first moment of the
+        next month, so the test below is 'at or after Start, before End'.
+    #>
+    $monthRange = Get-MonthRangeHC -MonthKey $MonthKey
+
     foreach ($alarm in $BatchComputer.alarms.alarm) {
         #region Only alarms raised in the requested month
         $alarmRaised = ConvertTo-DateTimeHC $alarm.raised
 
         if (-not $alarmRaised) { Continue }
 
-        if ((Get-MonthKeyHC -Date $alarmRaised) -ne $MonthKey) { Continue }
+        if (
+            ($alarmRaised -lt $monthRange.Start) -or
+            ($alarmRaised -ge $monthRange.End)
+        ) { Continue }
         #endregion
 
         #region Add row to worksheet alarms
@@ -532,7 +552,17 @@ function Get-SequenceRowHC {
 
     if (-not $fileCreatedOn) { return }
 
-    if ((Get-MonthKeyHC -Date $fileCreatedOn) -ne $MonthKey) { return }
+    <#
+        Unlike the batch and alarm builders this runs once per batch computer,
+        not once per record, so there is nothing to hoist. It uses the same
+        range test to keep all three builders deciding the month the same way.
+    #>
+    $monthRange = Get-MonthRangeHC -MonthKey $MonthKey
+
+    if (
+        ($fileCreatedOn -lt $monthRange.Start) -or
+        ($fileCreatedOn -ge $monthRange.End)
+    ) { return }
     #endregion
 
     foreach (

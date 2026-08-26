@@ -25,6 +25,12 @@ Describe 'Get-MonthKeyHC' {
         $aug | Should-NotBe $sep
     }
 
+    It 'gives a different key for the same month in another year' {
+        $a = Get-MonthKeyHC -Date ([datetime]'2024-08-16')
+        $b = Get-MonthKeyHC -Date ([datetime]'2025-08-16')
+        $a | Should-NotBe $b
+    }
+
     It 'sorts chronologically as text because the year and month lead' {
         $keys = @(
             Get-MonthKeyHC -Date ([datetime]'2024-09-01')
@@ -35,5 +41,59 @@ Describe 'Get-MonthKeyHC' {
         $keys[0] | Should-Be '202408 August'
         $keys[1] | Should-Be '202409 September'
         $keys[2] | Should-Be '202501 January'
+    }
+}
+
+Describe 'Get-MonthRangeHC' {
+    It 'returns the first moment of the month and of the next month' {
+        $result = Get-MonthRangeHC -MonthKey '202408 August'
+
+        $result.Start | Should-Be ([datetime]'2024-08-01T00:00:00')
+        $result.End | Should-Be ([datetime]'2024-09-01T00:00:00')
+    }
+
+    It 'rolls over to the next year in December' {
+        $result = Get-MonthRangeHC -MonthKey '202412 December'
+
+        $result.Start | Should-Be ([datetime]'2024-12-01T00:00:00')
+        $result.End | Should-Be ([datetime]'2025-01-01T00:00:00')
+    }
+
+    It 'agrees with Get-MonthKeyHC on every month of a year' -ForEach (1..12) {
+        $date = [datetime]::new(2024, $_, 15)
+
+        $range = Get-MonthRangeHC -MonthKey (Get-MonthKeyHC -Date $date)
+
+        $date -ge $range.Start | Should-BeTrue
+        $date -lt $range.End | Should-BeTrue
+    }
+
+    It 'places the last moment of a month inside that month' {
+        $range = Get-MonthRangeHC -MonthKey '202408 August'
+
+        $lastMoment = [datetime]'2024-08-31T23:59:59.999'
+
+        $lastMoment -ge $range.Start | Should-BeTrue
+        $lastMoment -lt $range.End | Should-BeTrue
+    }
+
+    It 'places the first moment of the next month outside the month' {
+        $range = Get-MonthRangeHC -MonthKey '202408 August'
+
+        [datetime]'2024-09-01T00:00:00' -lt $range.End | Should-BeFalse
+    }
+
+    It 'ignores the month name, only yyyyMM is read' {
+        $withName = Get-MonthRangeHC -MonthKey '202408 August'
+        $withoutName = Get-MonthRangeHC -MonthKey '202408'
+
+        $withName.Start | Should-Be $withoutName.Start
+        $withName.End | Should-Be $withoutName.End
+    }
+
+    It 'throws on a key that does not start with yyyyMM' -ForEach @(
+        'August', '2024', '2024AA August', '202499 Nonsense'
+    ) {
+        { Get-MonthRangeHC -MonthKey $_ } | Should-Throw
     }
 }
