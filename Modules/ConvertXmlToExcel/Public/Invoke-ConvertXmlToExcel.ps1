@@ -76,14 +76,23 @@ function Invoke-ConvertXmlToExcel {
     $xmlFiles = @()
     $groups = @()
 
+    <#
+        'Archived', 'NotArchived' and 'Duplicates' are appended to one item at
+        a time in the archive loop below. A PowerShell array cannot grow, so
+        '$array += $item' allocates a new array and copies every item into it,
+        which turns filling one into an operation that costs more the more
+        files there are. A List grows in place.
+
+        The others are assigned once from a pipeline and stay arrays.
+    #>
     $collection = @{
         Results        = @()
         Added          = @()
         AlreadyInSheet = @()
         FanOut         = @()
-        Archived       = @()
-        NotArchived    = @()
-        Duplicates     = @()
+        Archived       = [System.Collections.Generic.List[Object]]::new()
+        NotArchived    = [System.Collections.Generic.List[Object]]::new()
+        Duplicates     = [System.Collections.Generic.List[Object]]::new()
     }
 
     <#
@@ -91,6 +100,17 @@ function Invoke-ConvertXmlToExcel {
         happened to each file in its own row.
     #>
     $archiveOutcome = @{}
+
+    <#
+        The results of each XML file, looked up by file name. Filled after the
+        export runs.
+
+        Declared here and not where it is filled, because the overview at the
+        end of this function runs after the catch block and reads it even when
+        the export threw before it could be filled. An empty hash then gives
+        the same answer the old full scan of an empty result list gave.
+    #>
+    $resultsByFileName = @{}
 
     try {
         #region Import the configuration file
@@ -358,12 +378,29 @@ function Invoke-ConvertXmlToExcel {
         #>
         $archiveFolder = Join-Path $XmlFilesFolder 'Archive'
 
+        <#
+            Both this loop and the overview further down need the results of
+            one file, and both scanned the complete result list for every file
+            to find them. With one entry per file per month that scan grows
+            with the number of files, and it was repeated once per file, so the
+            work grew with the square of the number of files. Walking the
+            results once up front and grouping them by name turns every one of
+            those scans into a single lookup.
+        #>
+        foreach ($result in $collection.Results) {
+            $resultFileName = $result.File.Name
+
+            if (-not $resultsByFileName.ContainsKey($resultFileName)) {
+                $resultsByFileName[$resultFileName] = [System.Collections.Generic.List[Object]]::new()
+            }
+
+            $resultsByFileName[$resultFileName].Add($result)
+        }
+
         foreach ($fileDate in $fileDates) {
             $fileName = $fileDate.File.Name
 
-            $fileResults = @(
-                $collection.Results.where({ $_.File.Name -eq $fileName })
-            )
+            $fileResults = @($resultsByFileName[$fileName])
 
             $reason = $null
 
@@ -385,10 +422,12 @@ function Invoke-ConvertXmlToExcel {
             }
 
             if ($reason) {
-                $collection.NotArchived += [PSCustomObject]@{
-                    File   = $fileDate.File
-                    Reason = $reason
-                }
+                $collection.NotArchived.Add(
+                    [PSCustomObject]@{
+                        File   = $fileDate.File
+                        Reason = $reason
+                    }
+                )
 
                 $archiveOutcome[$fileName] = @{ Archived = $false; Reason = $reason }
 
@@ -404,22 +443,26 @@ function Invoke-ConvertXmlToExcel {
             $archiveOutcome[$fileName] = $moveResult
 
             if ($moveResult.Archived) {
-                $collection.Archived += $fileDate.File
+                $collection.Archived.Add($fileDate.File)
 
                 if ($moveResult.IsDuplicate) {
-                    $collection.Duplicates += [PSCustomObject]@{
-                        File       = $fileDate.File
-                        ArchivedAs = $moveResult.ArchivedAs
-                    }
+                    $collection.Duplicates.Add(
+                        [PSCustomObject]@{
+                            File       = $fileDate.File
+                            ArchivedAs = $moveResult.ArchivedAs
+                        }
+                    )
 
                     Write-Verbose "File '$fileName' archived as duplicate '$($moveResult.ArchivedAs)'"
                 }
             }
             else {
-                $collection.NotArchived += [PSCustomObject]@{
-                    File   = $fileDate.File
-                    Reason = $moveResult.Reason
-                }
+                $collection.NotArchived.Add(
+                    [PSCustomObject]@{
+                        File   = $fileDate.File
+                        Reason = $moveResult.Reason
+                    }
+                )
 
                 Write-Warning "File '$fileName' not archived: $($moveResult.Reason)"
             }
@@ -514,7 +557,7 @@ function Invoke-ConvertXmlToExcel {
 
         $archiveError = if ($archive -and (-not $archive.Archived)) { $archive.Reason }
 
-        $fileResults = @($collection.Results.where({ $_.File.Name -eq $fileName }))
+        $fileResults = @($resultsByFileName[$fileName])
 
         if (-not $fileResults) {
             #region The file never reached an Excel file
