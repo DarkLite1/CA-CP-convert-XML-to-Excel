@@ -22,6 +22,74 @@
         plant and batch computer that has no rows anywhere else in the workbook.
 #>
 
+function Get-ChildValueMapHC {
+    <#
+        .SYNOPSIS
+            The text of every leaf child of an XML node, by element name.
+
+        .DESCRIPTION
+            Reading a value as '$node.material_name' goes through PowerShell's
+            XmlNode adapter, which scans the child nodes and builds a member
+            table to resolve the name. That happens again for every property
+            read, and a single batch item is read about thirty times, so the
+            children of one node were walked over and over.
+
+            This walks them once and hands back a hash table. Every read after
+            that is a hash lookup.
+
+            A plain PowerShell hash table is used on purpose, because it is
+            case insensitive. The XML holds 'itempath' and 'uppath' while the
+            code asks for 'itemPath' and 'upPath', which worked because the
+            adapter is case insensitive too. A
+            'Dictionary[String, String]' would be case sensitive and would
+            quietly start returning nothing for those two.
+
+            Only leaf elements are included. A child that holds other elements,
+            such as 'dosingOperationTimes' or 'alarmGroups', is skipped: its
+            'InnerText' would be the text of the whole subtree glued together,
+            which is not what the adapter returns and not what anyone wants.
+            Those are still read from the node itself.
+
+            An empty element gives an empty string, which is what the adapter
+            returns for '<load_loading_point />' as well.
+
+        .PARAMETER Node
+            The XML node whose children are wanted. Missing nodes are allowed
+            and give an empty map, so callers do not have to test first.
+
+        .EXAMPLE
+            $map = Get-ChildValueMapHC -Node $batchItem
+            $map['material_name']
+    #>
+    param (
+        $Node
+    )
+
+    $map = @{}
+
+    if (-not $Node) { return $map }
+
+    foreach ($child in $Node.ChildNodes) {
+        if ($child.NodeType -ne [System.Xml.XmlNodeType]::Element) { continue }
+
+        $firstChild = $child.FirstChild
+
+        if (-not $firstChild) {
+            $map[$child.Name] = ''
+            continue
+        }
+
+        # Holds other elements, so it is a container and not a value
+        if ($firstChild.NodeType -eq [System.Xml.XmlNodeType]::Element) {
+            continue
+        }
+
+        $map[$child.Name] = $child.InnerText
+    }
+
+    $map
+}
+
 function Get-XmlRowHC {
     [CmdletBinding()]
     param (
@@ -49,30 +117,30 @@ function Get-XmlRowHC {
         batch and per sequence parameter further down, so it is done the same
         way everywhere to keep the file readable.
     #>
-    $header = $Xml.plant.plantHeader
+    $header = Get-ChildValueMapHC -Node $Xml.plant.plantHeader
 
     $plantHeader = [PSCustomObject]@{
-        country_code = $header.country_code
-        company_code = $header.company_code
-        company_name = $header.company_name
-        plant_code   = $header.plant_code
-        plant_name   = $header.plant_name
+        country_code = $header['country_code']
+        company_code = $header['company_code']
+        company_name = $header['company_name']
+        plant_code   = $header['plant_code']
+        plant_name   = $header['plant_name']
     }
     #endregion
 
     foreach ($batchComputer in $Xml.plant.batchComputers.batchComputer) {
         #region Get batchComputerHeader
-        $header = $batchComputer.batchComputerHeader
+        $header = Get-ChildValueMapHC -Node $batchComputer.batchComputerHeader
 
         $batchComputerHeader = [PSCustomObject]@{
-            system_type     = $header.system_type
-            system_provider = $header.system_provider
-            mixer_name      = $header.mixer_name
-            offset          = $header.offset
-            system_id       = Convert $header.system_id
-            mixer_size      = Convert $header.mixer_size
-            extraction_id   = Convert $header.extraction_id
-            file_created_on = ConvertTo-DateTimeHC $header.file_created_on
+            system_type     = $header['system_type']
+            system_provider = $header['system_provider']
+            mixer_name      = $header['mixer_name']
+            offset          = $header['offset']
+            system_id       = Convert $header['system_id']
+            mixer_size      = Convert $header['mixer_size']
+            extraction_id   = Convert $header['extraction_id']
+            file_created_on = ConvertTo-DateTimeHC $header['file_created_on']
         }
         #endregion
 
@@ -185,8 +253,15 @@ function Get-BatchRowHC {
     $monthRange = Get-MonthRangeHC -MonthKey $MonthKey
 
     foreach ($delivery in $BatchComputer.deliveries.delivery) {
+        <#
+            Built before the month test rather than after it. Walking the
+            children once costs about what a single adapter read costs, and
+            every delivery that is kept then reads 24 values from it for free.
+        #>
+        $header = Get-ChildValueMapHC -Node $delivery.deliveryHeader
+
         #region Only deliveries loaded in the requested month
-        $loadStartDate = ConvertTo-DateTimeHC $delivery.deliveryHeader.load_start_date
+        $loadStartDate = ConvertTo-DateTimeHC $header['load_start_date']
 
         if (-not $loadStartDate) { Continue }
 
@@ -207,33 +282,31 @@ function Get-BatchRowHC {
             afterwards with 'Add-Member', which rebuilds the member table of
             the object, again once per delivery.
         #>
-        $header = $delivery.deliveryHeader
-
         $deliveryHeader = [PSCustomObject]@{
-            load_mix_code_version  = $header.load_mix_code_version
-            load_mix_name          = $header.load_mix_name
-            load_loading_point     = $header.load_loading_point
-            load_qty_unit          = $header.load_qty_unit
-            load_qty_prod_unit     = $header.load_qty_prod_unit
-            reuse_qty_unit         = $header.reuse_qty_unit
-            load_truck             = $header.load_truck
-            license_plate          = $header.license_plate
-            ticket_leading_system  = $header.ticket_leading_system
-            load_id_erp            = Convert $header.load_id_erp
-            reference_delivery     = Convert $header.reference_delivery
-            original_delivery      = Convert $header.original_delivery
-            load_id_bcc            = Convert $header.load_id_bcc
-            load_order_number      = Convert $header.load_order_number
-            load_order_number_item = Convert $header.load_order_number_item
-            load_mix_code          = Convert $header.load_mix_code
-            load_qty               = Convert $header.load_qty
-            load_qty_erp           = Convert $header.load_qty_erp
-            load_qty_prod          = Convert $header.load_qty_prod
-            reuse_qty              = Convert $header.reuse_qty
-            ticket_id              = Convert $header.ticket_id
-            batch_count            = Convert $header.batch_count
-            load_end_date          = ConvertTo-DateTimeHC $header.load_end_date
-            ticket_time            = ConvertTo-DateTimeHC $header.ticket_time
+            load_mix_code_version  = $header['load_mix_code_version']
+            load_mix_name          = $header['load_mix_name']
+            load_loading_point     = $header['load_loading_point']
+            load_qty_unit          = $header['load_qty_unit']
+            load_qty_prod_unit     = $header['load_qty_prod_unit']
+            reuse_qty_unit         = $header['reuse_qty_unit']
+            load_truck             = $header['load_truck']
+            license_plate          = $header['license_plate']
+            ticket_leading_system  = $header['ticket_leading_system']
+            load_id_erp            = Convert $header['load_id_erp']
+            reference_delivery     = Convert $header['reference_delivery']
+            original_delivery      = Convert $header['original_delivery']
+            load_id_bcc            = Convert $header['load_id_bcc']
+            load_order_number      = Convert $header['load_order_number']
+            load_order_number_item = Convert $header['load_order_number_item']
+            load_mix_code          = Convert $header['load_mix_code']
+            load_qty               = Convert $header['load_qty']
+            load_qty_erp           = Convert $header['load_qty_erp']
+            load_qty_prod          = Convert $header['load_qty_prod']
+            reuse_qty              = Convert $header['reuse_qty']
+            ticket_id              = Convert $header['ticket_id']
+            batch_count            = Convert $header['batch_count']
+            load_end_date          = ConvertTo-DateTimeHC $header['load_end_date']
+            ticket_time            = ConvertTo-DateTimeHC $header['ticket_time']
             load_start_date        = $loadStartDate
         }
         #endregion
@@ -244,29 +317,37 @@ function Get-BatchRowHC {
                 Built once per batch and read again by every batch item of that
                 batch, so it stays a cache here too.
             #>
-            $header = $batch.batchHeader
+            $batchHeaderNode = $batch.batchHeader
+
+            $header = Get-ChildValueMapHC -Node $batchHeaderNode
 
             $batchHeader = [PSCustomObject]@{
-                qty_unit                  = $header.qty_unit
-                water_trim_unit           = $header.water_trim_unit
-                sequence                  = $header.sequence
-                mixing_time_unit          = $header.mixing_time_unit
-                mixer_power_unit          = $header.mixer_power_unit
-                slump_unit                = $header.slump_unit
-                mixer_discharge_time_unit = $header.mixer_discharge_time_unit
-                dischargingOperationTimes = $header.dischargingOperationTimes
-                batch_id                  = Convert $header.batch_id
-                batch_id_nr               = Convert $header.batch_id_nr
-                qty                       = Convert $header.qty
-                water_trim                = Convert $header.water_trim
-                manual                    = Convert $header.manual
-                mixing_time               = Convert $header.mixing_time
-                mixer_power               = Convert $header.mixer_power
-                slump                     = Convert $header.slump
-                mixer_discharge_time      = Convert $header.mixer_discharge_time
-                start_time                = ConvertTo-DateTimeHC $header.start_time
-                end_time                  = ConvertTo-DateTimeHC $header.end_time
-                aborted                   = Convert $header.batchinformation.aborted
+                qty_unit                  = $header['qty_unit']
+                water_trim_unit           = $header['water_trim_unit']
+                sequence                  = $header['sequence']
+                mixing_time_unit          = $header['mixing_time_unit']
+                mixer_power_unit          = $header['mixer_power_unit']
+                slump_unit                = $header['slump_unit']
+                mixer_discharge_time_unit = $header['mixer_discharge_time_unit']
+                <#
+                    A container of other elements, so it is not in the map and
+                    is still read from the node. It is iterated further down.
+                #>
+                dischargingOperationTimes = $batchHeaderNode.dischargingOperationTimes
+                batch_id                  = Convert $header['batch_id']
+                batch_id_nr               = Convert $header['batch_id_nr']
+                qty                       = Convert $header['qty']
+                water_trim                = Convert $header['water_trim']
+                manual                    = Convert $header['manual']
+                mixing_time               = Convert $header['mixing_time']
+                mixer_power               = Convert $header['mixer_power']
+                slump                     = Convert $header['slump']
+                mixer_discharge_time      = Convert $header['mixer_discharge_time']
+                start_time                = ConvertTo-DateTimeHC $header['start_time']
+                end_time                  = ConvertTo-DateTimeHC $header['end_time']
+                aborted                   = Convert (
+                    Get-ChildValueMapHC -Node $batchHeaderNode.batchinformation
+                )['aborted']
             }
             #endregion
 
@@ -332,18 +413,20 @@ function Get-BatchRowHC {
                 $dischargingOperation in
                 $batchHeader.dischargingOperationTimes.discharging
             ) {
+                $discharging = Get-ChildValueMapHC -Node $dischargingOperation
+
                 @{
                     Key   = 'discharging'
                     Cells = @{
                         A = $FileName
                         B = $PlantHeader.plant_code
                         C = $PlantHeader.plant_name
-                        D = Convert $dischargingOperation.batch_id
-                        E = Convert $dischargingOperation.batch_id_nr
-                        F = Convert $dischargingOperation.scale_id
-                        G = $dischargingOperation.material_type
-                        H = ConvertTo-DateTimeHC $dischargingOperation.discharge_start_time
-                        I = ConvertTo-DateTimeHC $dischargingOperation.discharge_end_time
+                        D = Convert $discharging['batch_id']
+                        E = Convert $discharging['batch_id_nr']
+                        F = Convert $discharging['scale_id']
+                        G = $discharging['material_type']
+                        H = ConvertTo-DateTimeHC $discharging['discharge_start_time']
+                        I = ConvertTo-DateTimeHC $discharging['discharge_end_time']
                     }
                 }
             }
@@ -351,6 +434,21 @@ function Get-BatchRowHC {
 
             #region Add rows to worksheet batchItems
             foreach ($batchItem in $batch.batchItems.batchItem) {
+                <#
+                    The hottest node in the whole script: about thirty values
+                    are read from every batch item, and there is one batch item
+                    per material per batch.
+
+                    'batchiteminformation' and 'dosingOperationTimes' hold
+                    other elements, so they are not in the map. Their nodes are
+                    resolved once here instead of once per value read.
+                #>
+                $item = Get-ChildValueMapHC -Node $batchItem
+
+                $itemInformation = Get-ChildValueMapHC -Node $batchItem.batchiteminformation
+
+                $dosing = Get-ChildValueMapHC -Node $batchItem.dosingOperationTimes.dosing
+
                 @{
                     Key   = 'item'
                     Cells = @{
@@ -387,38 +485,38 @@ function Get-BatchRowHC {
                         AE = $batchHeader.qty_unit
                         AF = $batchHeader.manual
                         AG = $batchHeader.aborted
-                        AH = Convert $batchItem.batchiteminformation.pulsecount
-                        AI = $batchItem.batchiteminformation.moisture_measure_type
-                        AJ = Convert $batchItem.material_code
-                        AK = $batchItem.material_name
-                        AL = $batchItem.vendor
-                        AM = $batchItem.vendor_source
-                        AN = $batchItem.vendor_delivery
-                        AO = $batchItem.material_type
-                        AP = Convert $batchItem.material_target_dry
-                        AQ = $batchItem.material_target_dry_unit
-                        AR = Convert $batchItem.material_target
-                        AS = $batchItem.material_target_unit
-                        AT = Convert $batchItem.material_target_adjusted
-                        AU = $batchItem.material_target_adjusted_unit
-                        AV = Convert $batchItem.material_amount
-                        AW = $batchItem.material_amount_unit
-                        AX = Convert $batchItem.material_moisture
-                        AY = $batchItem.material_moisture_unit
-                        AZ = Convert $batchItem.material_moisture_auto
-                        BA = Convert $batchItem.material_density
-                        BB = $batchItem.material_density_unit
-                        BC = Convert $batchItem.material_absorption
-                        BD = $batchItem.material_absorption_unit
-                        BE = Convert $batchItem.material_solid_content
-                        BF = $batchItem.material_solid_content_unit
-                        BG = Convert $batchItem.material_temperature
-                        BH = $batchItem.material_temperature_unit
-                        BI = Convert $batchItem.material_bin_number
-                        BJ = $batchItem.material_bin_name
-                        BK = Convert $batchItem.scale_id
-                        BL = $batchItem.dosingOperationTimes.dosing.material_dosing_start_time
-                        BM = $batchItem.dosingOperationTimes.dosing.material_dosing_end_time
+                        AH = Convert $itemInformation['pulsecount']
+                        AI = $itemInformation['moisture_measure_type']
+                        AJ = Convert $item['material_code']
+                        AK = $item['material_name']
+                        AL = $item['vendor']
+                        AM = $item['vendor_source']
+                        AN = $item['vendor_delivery']
+                        AO = $item['material_type']
+                        AP = Convert $item['material_target_dry']
+                        AQ = $item['material_target_dry_unit']
+                        AR = Convert $item['material_target']
+                        AS = $item['material_target_unit']
+                        AT = Convert $item['material_target_adjusted']
+                        AU = $item['material_target_adjusted_unit']
+                        AV = Convert $item['material_amount']
+                        AW = $item['material_amount_unit']
+                        AX = Convert $item['material_moisture']
+                        AY = $item['material_moisture_unit']
+                        AZ = Convert $item['material_moisture_auto']
+                        BA = Convert $item['material_density']
+                        BB = $item['material_density_unit']
+                        BC = Convert $item['material_absorption']
+                        BD = $item['material_absorption_unit']
+                        BE = Convert $item['material_solid_content']
+                        BF = $item['material_solid_content_unit']
+                        BG = Convert $item['material_temperature']
+                        BH = $item['material_temperature_unit']
+                        BI = Convert $item['material_bin_number']
+                        BJ = $item['material_bin_name']
+                        BK = Convert $item['scale_id']
+                        BL = $dosing['material_dosing_start_time']
+                        BM = $dosing['material_dosing_end_time']
                     }
                 }
             }
@@ -463,8 +561,16 @@ function Get-AlarmRowHC {
     $monthRange = Get-MonthRangeHC -MonthKey $MonthKey
 
     foreach ($alarm in $BatchComputer.alarms.alarm) {
+        <#
+            'ticket' and 'batch' hold other elements, so they are not in the
+            map of the alarm itself and get a map each. 'alarmGroups' can hold
+            several 'alarmGroup' elements whose values are joined below, which
+            is a collection and not a single value, so it stays on the node.
+        #>
+        $alarmMap = Get-ChildValueMapHC -Node $alarm
+
         #region Only alarms raised in the requested month
-        $alarmRaised = ConvertTo-DateTimeHC $alarm.raised
+        $alarmRaised = ConvertTo-DateTimeHC $alarmMap['raised']
 
         if (-not $alarmRaised) { Continue }
 
@@ -473,6 +579,10 @@ function Get-AlarmRowHC {
             ($alarmRaised -ge $monthRange.End)
         ) { Continue }
         #endregion
+
+        $ticket = Get-ChildValueMapHC -Node $alarm.ticket
+
+        $batch = Get-ChildValueMapHC -Node $alarm.batch
 
         #region Add row to worksheet alarms
         @{
@@ -483,28 +593,28 @@ function Get-AlarmRowHC {
                 C  = $PlantHeader.plant_name
                 D  = $null
                 E  = $BatchComputerHeader.extraction_id
-                F  = Convert $alarm.Id
+                F  = Convert $alarmMap['Id']
                 G  = $alarmRaised
-                H  = ConvertTo-DateTimeHC $alarm.dropped
-                I  = ConvertTo-DateTimeHC $alarm.handled
-                J  = ConvertTo-DateTimeHC $alarm.clicktimestamp
-                K  = Convert $alarm.text
-                L  = Convert $alarm.alarm_message
-                M  = Convert $alarm.message
-                N  = Convert $alarm.parameter
-                O  = Convert $alarm.ticket.Id
-                P  = Convert $alarm.ticket.Code
-                Q  = Convert $alarm.ticket.Reference
-                R  = Convert $alarm.ticket.Customer
-                S  = Convert $alarm.ticket.Project
-                T  = Convert $alarm.ticket.Wanted
-                U  = Convert $alarm.ticket.Truck
-                V  = Convert $alarm.batch.Id
-                W  = ConvertTo-DateTimeHC $alarm.batch.TimeStart
-                X  = ConvertTo-DateTimeHC $alarm.batch.TimeReady
-                Y  = Convert $alarm.batch.Wanted
-                Z  = Convert $alarm.batch.WeighListCode
-                AA = Convert $alarm.batch.WeighListName
+                H  = ConvertTo-DateTimeHC $alarmMap['dropped']
+                I  = ConvertTo-DateTimeHC $alarmMap['handled']
+                J  = ConvertTo-DateTimeHC $alarmMap['clicktimestamp']
+                K  = Convert $alarmMap['text']
+                L  = Convert $alarmMap['alarm_message']
+                M  = Convert $alarmMap['message']
+                N  = Convert $alarmMap['parameter']
+                O  = Convert $ticket['Id']
+                P  = Convert $ticket['Code']
+                Q  = Convert $ticket['Reference']
+                R  = Convert $ticket['Customer']
+                S  = Convert $ticket['Project']
+                T  = Convert $ticket['Wanted']
+                U  = Convert $ticket['Truck']
+                V  = Convert $batch['Id']
+                W  = ConvertTo-DateTimeHC $batch['TimeStart']
+                X  = ConvertTo-DateTimeHC $batch['TimeReady']
+                Y  = Convert $batch['Wanted']
+                Z  = Convert $batch['WeighListCode']
+                AA = Convert $batch['WeighListName']
                 AB = if ($alarm.alarmGroups.alarmGroup.Code) {
                     $alarm.alarmGroups.alarmGroup.Code -join ','
                 }
@@ -574,14 +684,16 @@ function Get-SequenceRowHC {
             Read again by every property of every sub batch and every parameter
             below, so it stays a cache.
         #>
+        $sequenceParameterMap = Get-ChildValueMapHC -Node $sequenceParameter
+
         $sequenceHeader = [PSCustomObject]@{
-            name             = $sequenceParameter.name
-            baseName         = $sequenceParameter.baseName
-            maxBatchSizeUnit = $sequenceParameter.maxBatchSizeUnit
-            ID               = Convert $sequenceParameter.ID
-            NrofSubBatches   = Convert $sequenceParameter.NrofSubBatches
-            maxbatchsize     = Convert $sequenceParameter.maxbatchsize
-            blocked          = Convert $sequenceParameter.blocked
+            name             = $sequenceParameterMap['name']
+            baseName         = $sequenceParameterMap['baseName']
+            maxBatchSizeUnit = $sequenceParameterMap['maxBatchSizeUnit']
+            ID               = Convert $sequenceParameterMap['ID']
+            NrofSubBatches   = Convert $sequenceParameterMap['NrofSubBatches']
+            maxbatchsize     = Convert $sequenceParameterMap['maxbatchsize']
+            blocked          = Convert $sequenceParameterMap['blocked']
         }
         #endregion
 
@@ -589,6 +701,13 @@ function Get-SequenceRowHC {
             $subBatchName = Convert $subBatch.name
 
             foreach ($property in $subBatch.properties.property) {
+                <#
+                    The map is case insensitive, which matters here: the XML
+                    holds 'itempath' and 'uppath' while the cells below ask for
+                    'itemPath' and 'upPath'.
+                #>
+                $propertyMap = Get-ChildValueMapHC -Node $property
+
                 #region Add row to worksheet sequences
                 @{
                     Key   = 'sequence'
@@ -607,12 +726,12 @@ function Get-SequenceRowHC {
                         L = $sequenceHeader.maxBatchSizeUnit
                         M = $sequenceHeader.blocked
                         N = $subBatchName
-                        O = $property.name
-                        P = $property.prefix
-                        Q = $property.itemPath
-                        R = $property.upPath
-                        S = Convert $property.value
-                        T = $property.suffix
+                        O = $propertyMap['name']
+                        P = $propertyMap['prefix']
+                        Q = $propertyMap['itemPath']
+                        R = $propertyMap['upPath']
+                        S = Convert $propertyMap['value']
+                        T = $propertyMap['suffix']
                     }
                 }
                 #endregion
@@ -621,6 +740,8 @@ function Get-SequenceRowHC {
 
         foreach ($parameter in $sequenceParameter.parameters.parameter) {
             foreach ($property in $parameter.properties.property) {
+                $propertyMap = Get-ChildValueMapHC -Node $property
+
                 #region Add row to worksheet sequences
                 @{
                     Key   = 'sequence'
@@ -639,12 +760,12 @@ function Get-SequenceRowHC {
                         L = $sequenceHeader.maxBatchSizeUnit
                         M = $sequenceHeader.blocked
                         N = $null
-                        O = $property.name
-                        P = $property.prefix
-                        Q = $property.itemPath
-                        R = $property.upPath
-                        S = Convert $property.value
-                        T = $property.suffix
+                        O = $propertyMap['name']
+                        P = $propertyMap['prefix']
+                        Q = $propertyMap['itemPath']
+                        R = $propertyMap['upPath']
+                        S = Convert $propertyMap['value']
+                        T = $propertyMap['suffix']
                     }
                 }
                 #endregion
