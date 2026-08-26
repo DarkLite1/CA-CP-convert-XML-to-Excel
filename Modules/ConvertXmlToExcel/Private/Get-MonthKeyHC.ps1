@@ -21,11 +21,24 @@ function Get-MonthKeyHC {
             Keeping both on this single function means they can never drift
             apart.
 
+            The month name is written with InvariantCulture, so it is English
+            on every machine. Without it the name follows the regional setting
+            of the server: the same August would be '202408 augustus' on a
+            Dutch machine and '202408 août' on a French one. Because this key
+            becomes the name of the Excel file, a server whose culture changed,
+            or a second server with another regional setting, would not
+            recognise the file of the running month and would quietly start an
+            empty one next to it.
+
+            This matches ConvertTo-DateTimeHC, which already reads dates with
+            InvariantCulture so that a date means the same thing everywhere.
+            Writing them follows the same rule.
+
             The result is cached per year and month. Formatting a date is not
             free, it walks the format string and reads the month names of the
-            current culture, and this ran once per record in a file. Every
-            record of the same month produces the same key by definition, so it
-            is worked out once.
+            culture, and this ran once per record in a file. Every record of
+            the same month produces the same key by definition, so it is worked
+            out once.
 
         .EXAMPLE
             Get-MonthKeyHC -Date ([DateTime]'2024-08-16')   # '202408 August'
@@ -41,7 +54,7 @@ function Get-MonthKeyHC {
 
     if ($monthKey) { return $monthKey }
 
-    $monthKey = $Date.ToString('yyyyMM MMMM')
+    $monthKey = $Date.ToString('yyyyMM MMMM', [CultureInfo]::InvariantCulture)
 
     $script:MonthKeyCache[$cacheKey] = $monthKey
 
@@ -89,9 +102,16 @@ function Get-MonthRangeHC {
     $year = 0
     $month = 0
 
+    <#
+        InvariantCulture here too, so the digits are read the same way on a
+        machine with any regional setting.
+    #>
+    $numberStyle = [System.Globalization.NumberStyles]::None
+    $culture = [CultureInfo]::InvariantCulture
+
     if (
-        (-not [int]::TryParse($MonthKey.Substring(0, 4), [ref]$year)) -or
-        (-not [int]::TryParse($MonthKey.Substring(4, 2), [ref]$month)) -or
+        (-not [int]::TryParse($MonthKey.Substring(0, 4), $numberStyle, $culture, [ref]$year)) -or
+        (-not [int]::TryParse($MonthKey.Substring(4, 2), $numberStyle, $culture, [ref]$month)) -or
         ($month -lt 1) -or ($month -gt 12)
     ) {
         throw "Month key '$MonthKey' does not start with 'yyyyMM'"

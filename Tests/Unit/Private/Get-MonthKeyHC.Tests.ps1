@@ -44,6 +44,41 @@ Describe 'Get-MonthKeyHC' {
     }
 }
 
+Describe 'Get-MonthKeyHC is not affected by the culture of the machine' {
+    BeforeEach {
+        $originalCulture = [Threading.Thread]::CurrentThread.CurrentCulture
+    }
+
+    AfterEach {
+        [Threading.Thread]::CurrentThread.CurrentCulture = $originalCulture
+    }
+
+    It 'writes the month name in English on a <Name> machine' -ForEach @(
+        @{ Name = 'Dutch'; Culture = 'nl-BE' }
+        @{ Name = 'French'; Culture = 'fr-FR' }
+        @{ Name = 'German'; Culture = 'de-DE' }
+    ) {
+        <#
+            Without InvariantCulture this returns '202408 augustus' on the
+            Dutch culture, which becomes a different Excel file name and
+            silently starts an empty workbook next to the real one.
+        #>
+        [Threading.Thread]::CurrentThread.CurrentCulture = [CultureInfo]::new($Culture)
+
+        Get-MonthKeyHC -Date ([datetime]'2024-08-16') | Should-Be '202408 August'
+    }
+
+    It 'gives the same key on two different cultures' {
+        [Threading.Thread]::CurrentThread.CurrentCulture = [CultureInfo]::new('nl-BE')
+        $dutch = Get-MonthKeyHC -Date ([datetime]'2025-03-16')
+
+        [Threading.Thread]::CurrentThread.CurrentCulture = [CultureInfo]::new('en-US')
+        $english = Get-MonthKeyHC -Date ([datetime]'2025-03-16')
+
+        $dutch | Should-Be $english
+    }
+}
+
 Describe 'Get-MonthRangeHC' {
     It 'returns the first moment of the month and of the next month' {
         $result = Get-MonthRangeHC -MonthKey '202408 August'
@@ -89,6 +124,22 @@ Describe 'Get-MonthRangeHC' {
 
         $withName.Start | Should-Be $withoutName.Start
         $withName.End | Should-Be $withoutName.End
+    }
+
+    It 'reads a key on a machine with another regional setting' {
+        $originalCulture = [Threading.Thread]::CurrentThread.CurrentCulture
+
+        try {
+            [Threading.Thread]::CurrentThread.CurrentCulture = [CultureInfo]::new('nl-BE')
+
+            $result = Get-MonthRangeHC -MonthKey '202408 August'
+
+            $result.Start | Should-Be ([datetime]'2024-08-01T00:00:00')
+            $result.End | Should-Be ([datetime]'2024-09-01T00:00:00')
+        }
+        finally {
+            [Threading.Thread]::CurrentThread.CurrentCulture = $originalCulture
+        }
     }
 
     It 'throws on a key that does not start with yyyyMM' -ForEach @(
