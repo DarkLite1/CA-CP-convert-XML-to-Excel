@@ -6,12 +6,12 @@ Pester 6 test suite for the ConvertXmlToExcel module. PowerShell 7+ required.
 
 ```
 Tests/
-├── Helpers/       Shared fixtures (dot-sourced by tests)
-├── TestData/      Sample XML files used by the integration tests
-├── Unit/          One test file per source file; mocks/fakes everything external
+├── Helpers/       Shared fixtures, dot-sourced by unit and integration tests
+├── TestData/      Sample XML files
+├── Unit/          One test file per source file, everything external is faked
 │   ├── Private/
 │   └── Public/
-└── Integration/   Multi-component scenarios; runs the operation scripts against real .xlsx
+└── Integration/   Runs the operation scripts and the orchestrator for real
 ```
 
 ### Unit/
@@ -25,21 +25,34 @@ is replaced by a small fake built in the test's `BeforeAll`.
 
 ### Integration/
 
-`Fanout.Tests.ps1` is the end-to-end safety net. It builds a batch XML file with
-deliveries in two different months, runs `GetXmlFileDates.ps1` and
-`ExportXmlFileToExcel.ps1` exactly as the orchestrator does, and reads the
-resulting `.xlsx` files back with `Import-Excel` to prove:
+Tests that run the real thing end to end: the operation scripts, or the whole
+orchestrator against real folders and real `.xlsx` files. They are slower than
+the unit tests and prove that the pieces fit together.
+
+`Fanout.Tests.ps1` builds a batch XML file with deliveries in two different
+months, runs `GetXmlFileDates.ps1` and `ExportXmlFileToExcel.ps1` exactly as the
+orchestrator does, and reads the resulting `.xlsx` files back to prove:
 
 - one XML file produces two monthly Excel files,
 - each file holds only its own month's delivery,
 - a second run adds nothing (the duplicate check works per file per workbook),
 - a month with no records produces no rows.
 
+`Overview.Tests.ps1` runs `Invoke-ConvertXmlToExcel` and reads `Overview.xlsx`
+back, covering what happens to a file after conversion:
+
+- a file that converts and is archived,
+- the same file delivered again with the same content, archived as a duplicate,
+- the same name with different content, left behind for a manual action,
+- a file without a usable date,
+- a file with records in two months.
+
 ### Helpers/
 
 `Fixtures.Xml.ps1` provides `New-BatchXmlHC` and `New-AlarmXmlHC`, which build
 minimal XML documents in the exact shape the row builders consume, including the
-odd cases (a file spanning two months, a record with no date).
+odd cases (a file spanning two months, a record with no date). It sits at the
+`Tests` root because both the unit and the integration tests use it.
 
 ## Running
 
@@ -49,6 +62,9 @@ Invoke-Pester -Path .\Tests
 
 # Fast feedback (unit only)
 Invoke-Pester -Path .\Tests\Unit
+
+# The slower end to end tests
+Invoke-Pester -Path .\Tests\Integration
 
 # One file, detailed output
 Invoke-Pester -Path .\Tests\Unit\Private\Get-XmlFileMonthHC.Tests.ps1 -Output Detailed
@@ -69,12 +85,13 @@ Invoke-Pester -Path .\Tests\Unit\Private\Get-XmlFileMonthHC.Tests.ps1 -Output De
 
 ## What is not covered
 
-`Invoke-ConvertXmlToExcel` (the orchestrator) is only checked for its public
-contract — that it is exported, that ImportExcel is its only external module
-dependency, and which parameters are mandatory. Its full run needs the Windows
-event log, the MailKit/MimeKit assemblies and Windows file shares, so it is
-exercised in the real environment rather than in unit tests. Everything it
-orchestrates is covered directly: `Get-XmlFileMonthHC` and `Get-XmlRowHC` for
-the grouping, `Fanout.Tests.ps1` for the export end to end, and
-`Utils.Tests.ps1`, `ErrorHandling.Tests.ps1`, `Mail.Tests.ps1` and
-`SummaryMail.Tests.ps1` for the bundled helpers.
+`Invoke-ConvertXmlToExcel` has two kinds of coverage. `Tests/Unit/Public`
+checks its contract: that it is exported, that ImportExcel is its only external
+module dependency, and which parameters are mandatory.
+`Tests/Integration/Overview.Tests.ps1` runs it for real against temporary
+folders.
+
+What is not covered by any test: sending mail with `Send-MailKitMessageHC` and
+writing to the Windows event log with `Write-EventLogSafeHC`. Both need a real
+SMTP server and a Windows event log, so they are exercised in the real
+environment instead.

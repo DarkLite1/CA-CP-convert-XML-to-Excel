@@ -193,8 +193,9 @@ containing:
 
 `Overview.xlsx` has an `Error` column holding whatever went wrong for that row —
 reading the date, writing to Excel or archiving — so a problem is always on the
-line of the file it belongs to. Its `Archived` column shows `Yes`, `No`, or the
-name the file received when it was archived as a duplicate.
+line of the file it belongs to. `Archived` is `TRUE` or `FALSE`, and `ArchivedAs`
+holds the name the file received, which differs from the file name only when it
+was archived as a duplicate.
 
 `Errors.json` is only written when there is something to report. Log folders
 older than `SaveLogFiles.DeleteLogsAfterDays` are removed at the end of a run.

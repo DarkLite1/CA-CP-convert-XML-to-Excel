@@ -11,7 +11,7 @@ BeforeAll {
     . "$moduleRoot\Private\Get-MonthKeyHC.ps1"
     . "$moduleRoot\Private\XmlRow.ps1"
 
-    . "$root\Tests\Unit\Helpers\Fixtures.Xml.ps1"
+    . "$root\Tests\Helpers\Fixtures.Xml.ps1"
 }
 
 Describe 'Get-XmlRowHC' {

@@ -502,10 +502,15 @@ function Invoke-ConvertXmlToExcel {
 
         $archive = $archiveOutcome[$fileName]
 
-        $archivedAs = if ($archive -and $archive.Archived) {
-            if ($archive.ArchivedAs -ne $fileName) { $archive.ArchivedAs } else { 'Yes' }
-        }
-        else { 'No' }
+        <#
+            A real boolean, so Excel shows TRUE or FALSE and the column can be
+            filtered like the other yes or no columns. The name the file
+            received is kept apart in 'ArchivedAs', which only differs from the
+            file name when the file was archived as a duplicate.
+        #>
+        $isArchived = [Boolean]($archive -and $archive.Archived)
+
+        $archivedAs = if ($isArchived) { $archive.ArchivedAs }
 
         $archiveError = if ($archive -and (-not $archive.Archived)) { $archive.Reason }
 
@@ -522,7 +527,8 @@ function Invoke-ConvertXmlToExcel {
                     AlreadyInSheet = $false
                     AddedToSheet   = $false
                     RowsAdded      = 0
-                    Archived       = $archivedAs
+                    Archived       = $isArchived
+                    ArchivedAs     = $archivedAs
                     Error          = @(
                         $(if ($fileDate.Error) { "No date could be read from the XML file: $($fileDate.Error)" })
                         $archiveError
@@ -544,7 +550,8 @@ function Invoke-ConvertXmlToExcel {
                     AlreadyInSheet = $result.AlreadyInSheet
                     AddedToSheet   = $result.AddedToSheet
                     RowsAdded      = $result.RowsAdded
-                    Archived       = $archivedAs
+                    Archived       = $isArchived
+                    ArchivedAs     = $archivedAs
                     Error          = @(
                         $result.Error
                         $archiveError
