@@ -66,6 +66,14 @@ Begin {
         The helpers are private to the module, so importing the module would
         not expose them. This script is run by path, possibly in its own
         runspace, so it dot-sources the helper files it needs directly.
+
+        Loaded EVERY time, without checking whether the functions are already
+        there. When the orchestrator runs this script sequentially it does so
+        from inside the module, so the module's own private copies are in scope
+        here and any such check would find them and skip the loading. The
+        functions would then resolve to the module's copies, whose script scope
+        is the module's and not this one. Dot-sourcing unconditionally puts the
+        copies this script owns in front of them.
     #>
     $moduleRoot = Split-Path $ModulePath -Parent
 
@@ -270,6 +278,43 @@ Process {
             }
         }
         #endregion
+    }
+    catch {
+        <#
+            Whatever is left: a helper that failed in a way this script does not
+            know about. It is turned into a result per file rather than thrown,
+            because this script runs inside the caller's ForEach-Object and a
+            throw there ends the whole pipeline. The caller would lose the
+            results of every month that did succeed and would archive nothing at
+            all, for a problem in one workbook.
+        #>
+        Write-Warning "Excel file '$ExcelFilePath': Failure: $_"
+
+        $unexpectedError = "Failed writing the Excel file: $_"
+
+        if ($Error.Count) { $Error.RemoveAt(0) }
+
+        $answeredFor = @{}
+
+        foreach ($result in $results) {
+            $answeredFor[$result.File.Name] = $true
+
+            <#
+                Nothing was saved, so a file reported as added has to be a
+                failure here as well.
+            #>
+            if ($result.AddedToSheet) {
+                $result.AddedToSheet = $false
+                $result.RowsAdded = 0
+                $result.Error = $unexpectedError
+            }
+        }
+
+        foreach ($file in $XmlFiles) {
+            if ($answeredFor[$file.Name]) { Continue }
+
+            $results.Add((New-ResultHC -File $file -ErrorMessage $unexpectedError))
+        }
     }
     finally {
         <#

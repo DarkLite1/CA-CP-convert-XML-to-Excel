@@ -71,6 +71,16 @@ try {
         meant parsing every helper file again for every file processed. Worse,
         'ExcelWorkbook.ps1' carries a '#Requires -Modules ImportExcel', which
         pulled ImportExcel into runspaces that never write a single cell.
+
+        Loaded EVERY time, without checking whether the functions are already
+        there. When the orchestrator runs this script sequentially it does so
+        from inside the module, so the module's own private copies are in scope
+        here and any such check would find them and skip the loading. The
+        functions would then resolve to the module's copies, whose script scope
+        is the module's and not this one, and 'Get-MonthKeyHC' reads its cache
+        from that scope. Dot-sourcing unconditionally puts the copies this
+        script owns in front of them, which is what keeps it running against
+        the files it was pointed at.
     #>
     $moduleRoot = Split-Path $ModulePath -Parent
 
