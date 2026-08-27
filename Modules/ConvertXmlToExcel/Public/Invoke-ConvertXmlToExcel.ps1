@@ -264,6 +264,23 @@ function Invoke-ConvertXmlToExcel {
         $ExcelFilesFolder = $config.Path.ExcelFiles
         $ExcelFileName = $config.ExcelFileName
 
+        #region The values both stages hand to their script block
+        <#
+            A flat object holding nothing but strings: the two script paths, the
+            module path and the type. Flat on purpose, because a script block
+            running in another runspace should not have to reach through an
+            object to find what it needs, and because everything it does need is
+            then visible in one place instead of being collected from whatever
+            happens to be in scope.
+        #>
+        $runContext = [PSCustomObject]@{
+            Type            = $Type
+            ModulePath      = $modulePathItem
+            GetXmlFileDates = $scriptPathItem.GetXmlFileDates
+            ExportToExcel   = $scriptPathItem.ExportToExcel
+        }
+        #endregion
+
         #region Get the XML files
         Write-Verbose "Get xml files in folder '$XmlFilesFolder'"
 
@@ -275,30 +292,30 @@ function Invoke-ConvertXmlToExcel {
         #endregion
 
         #region Get the months in each XML file
-        $scriptBlock = {
-            $file = $_
+        <#
+            One script block for both ways of running. Invoke-WithOptionalParallelismHC
+            runs it as a plain loop when the throttle is 1 and in parallel
+            runspaces above that, and hands it everything it needs as arguments.
 
-            #region Declare variables for code running in parallel
-            if (-not $MaxConcurrentJobs) {
-                $scriptPathItem = $using:scriptPathItem
-                $modulePathItem = $using:modulePathItem
-                $Type = $using:Type
+            The block therefore holds no '$using:' at all. It cannot: the helper
+            rebuilds it with [scriptblock]::Create() inside each runspace, which
+            leaves it without the scope '$using:' would bind to. Everything from
+            here travels through the DTO instead, which is also what makes the
+            two ways of running the same code rather than two blocks that have
+            to be kept in step by hand.
+        #>
+        $fileDates = @(
+            Invoke-WithOptionalParallelismHC `
+                -InputObject $xmlFiles `
+                -ThrottleLimit ([int]$config.MaxConcurrentJobs.GetXmlFileDates) `
+                -ArgumentList $runContext `
+                -ScriptBlock {
+                param ($XmlFile, $Context)
+
+                & $Context.GetXmlFileDates -XmlFile $XmlFile `
+                    -Type $Context.Type -ModulePath $Context.ModulePath
             }
-            #endregion
-
-            & $scriptPathItem.GetXmlFileDates -XmlFile $file -Type $Type -ModulePath $modulePathItem
-        }
-
-        $MaxConcurrentJobs = [int]$config.MaxConcurrentJobs.GetXmlFileDates
-
-        $foreachParams = if ($MaxConcurrentJobs -eq 1) {
-            @{ Process = $scriptBlock }
-        }
-        else {
-            @{ Parallel = $scriptBlock; ThrottleLimit = $MaxConcurrentJobs }
-        }
-
-        $fileDates = @($xmlFiles | ForEach-Object @foreachParams)
+        )
 
         Write-Verbose "Retrieved dates from $($fileDates.Count) files"
         #endregion
@@ -320,9 +337,14 @@ function Invoke-ConvertXmlToExcel {
             }
         }
 
+        <#
+            One flat object per month, holding everything the export script
+            needs and nothing else. This is what the script block below is
+            handed, one at a time.
+        #>
         $groups = @(
             $filesPerMonth.GetEnumerator() | Sort-Object Name | ForEach-Object {
-                @{
+                [PSCustomObject]@{
                     MonthKey      = $_.Key
                     Files         = @($_.Value)
                     ExcelFilePath = Join-Path $ExcelFilesFolder ($ExcelFileName -f $_.Key)
@@ -338,59 +360,25 @@ function Invoke-ConvertXmlToExcel {
         #endregion
 
         #region Create the Excel files
-        $scriptBlock = {
-            $group = $_
+        <#
+            The same shape as the stage above: one block, everything it needs
+            passed in, no '$using:'. The block carries no try/catch either. The
+            export script reports its own failures per file, so there is nothing
+            left here to catch that it would not already have answered for.
+        #>
+        $collection.Results = @(
+            Invoke-WithOptionalParallelismHC `
+                -InputObject $groups `
+                -ThrottleLimit ([int]$config.MaxConcurrentJobs.CreateExcelFile) `
+                -ArgumentList $runContext `
+                -ScriptBlock {
+                param ($Group, $Context)
 
-            #region Declare variables for code running in parallel
-            if (-not $MaxConcurrentJobs) {
-                $scriptPathItem = $using:scriptPathItem
-                $modulePathItem = $using:modulePathItem
-                $Type = $using:Type
+                & $Context.ExportToExcel -XmlFiles $Group.Files `
+                    -ExcelFilePath $Group.ExcelFilePath -Type $Context.Type `
+                    -MonthKey $Group.MonthKey -ModulePath $Context.ModulePath
             }
-            #endregion
-
-            <#
-                The export script reports its failures per file, so this is the
-                net below it: anything it does not catch would otherwise end the
-                whole ForEach-Object, and with it the results of every month
-                that did succeed. The archive step reads those results, so a
-                single bad workbook would stop every XML file of the run from
-                being archived.
-            #>
-            try {
-                & $scriptPathItem.ExportToExcel -XmlFiles $group.Files -ExcelFilePath $group.ExcelFilePath -Type $Type -MonthKey $group.MonthKey -ModulePath $modulePathItem
-            }
-            catch {
-                $exportError = "Failed writing the Excel file: $_"
-
-                Write-Warning "Excel file '$($group.ExcelFilePath)': $exportError"
-
-                foreach ($groupFile in $group.Files) {
-                    [PSCustomObject]@{
-                        DateTime       = Get-Date
-                        File           = $groupFile
-                        ExcelFilePath  = $group.ExcelFilePath
-                        MonthKey       = $group.MonthKey
-                        AddedToSheet   = $false
-                        AlreadyInSheet = $false
-                        NothingToAdd   = $false
-                        RowsAdded      = 0
-                        Error          = $exportError
-                    }
-                }
-            }
-        }
-
-        $MaxConcurrentJobs = [int]$config.MaxConcurrentJobs.CreateExcelFile
-
-        $foreachParams = if ($MaxConcurrentJobs -eq 1) {
-            @{ Process = $scriptBlock }
-        }
-        else {
-            @{ Parallel = $scriptBlock; ThrottleLimit = $MaxConcurrentJobs }
-        }
-
-        $collection.Results = @($groups | ForEach-Object @foreachParams)
+        )
         #endregion
 
         #region Archive the XML files
