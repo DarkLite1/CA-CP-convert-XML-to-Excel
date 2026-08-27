@@ -22,6 +22,27 @@ BeforeAll {
     # A batch file with deliveries in August and September
     . "$root\Tests\Helpers\Fixtures.Xml.ps1"
 
+    function New-EmptiedWorkbookHC {
+        <#
+            .SYNOPSIS
+                An Excel file whose plant worksheet lost its header rows.
+
+            .DESCRIPTION
+                What a workbook looks like after someone emptied a worksheet by
+                hand. Opening it has to fail, and the point of the tests using
+                it is what the export script does with that failure.
+        #>
+        param ([String]$Path)
+
+        $package = Open-ExcelPackage -Path $Path
+
+        try {
+            $package.Workbook.Worksheets.Delete('plantBatchComputers')
+            $null = $package.Workbook.Worksheets.Add('plantBatchComputers')
+        }
+        finally { Close-ExcelPackage $package }
+    }
+
     function Get-RowMonthHC {
         param($Value)
         $date = if ($Value -is [datetime]) {
@@ -101,6 +122,49 @@ Describe 'Fanout end to end' {
             -Type 'Batch' -MonthKey '202401 January' -ModulePath $modulePath
 
         $result.AddedToSheet | Should-BeFalse
+    }
+
+    Context 'the Excel file cannot be opened' {
+        BeforeEach {
+            $script:xlsx = Join-Path $excelFolder.FullName 'Batches - 202408 August.xlsx'
+
+            $null = & $export -XmlFiles $xmlFile -ExcelFilePath $xlsx `
+                -Type 'Batch' -MonthKey '202408 August' -ModulePath $modulePath
+
+            New-EmptiedWorkbookHC -Path $xlsx
+
+            $script:result = & $export -XmlFiles $xmlFile -ExcelFilePath $xlsx `
+                -Type 'Batch' -MonthKey '202408 August' -ModulePath $modulePath `
+                -WarningAction 'SilentlyContinue'
+        }
+
+        It 'reports the failure per file instead of throwing' {
+            <#
+                A throw would not fail this month alone. The script runs inside
+                the orchestrator's ForEach-Object, so it would end the whole
+                pipeline: the results of the months that did succeed never reach
+                the caller and not one XML file of the run is archived.
+            #>
+            $result | Should-BeCollection -Count 1
+            $result.Error | Should-MatchString 'Failed opening Excel file'
+        }
+
+        It 'reports nothing as written' {
+            $result.AddedToSheet | Should-BeFalse
+            $result.AlreadyInSheet | Should-BeFalse
+            $result.NothingToAdd | Should-BeFalse
+        }
+
+        It 'leaves the Excel file closed, so the next run can open it' {
+            <#
+                The package holds the file until it is disposed. Deleting the
+                file is what proves it was released: a file still held open
+                cannot be removed.
+            #>
+            Remove-Item -LiteralPath $xlsx -Force
+
+            Test-Path -LiteralPath $xlsx | Should-BeFalse
+        }
     }
 
     It 'reports NothingToAdd for a delivery that holds no batches' {

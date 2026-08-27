@@ -349,7 +349,36 @@ function Invoke-ConvertXmlToExcel {
             }
             #endregion
 
-            & $scriptPathItem.ExportToExcel -XmlFiles $group.Files -ExcelFilePath $group.ExcelFilePath -Type $Type -MonthKey $group.MonthKey -ModulePath $modulePathItem
+            <#
+                The export script reports its failures per file, so this is the
+                net below it: anything it does not catch would otherwise end the
+                whole ForEach-Object, and with it the results of every month
+                that did succeed. The archive step reads those results, so a
+                single bad workbook would stop every XML file of the run from
+                being archived.
+            #>
+            try {
+                & $scriptPathItem.ExportToExcel -XmlFiles $group.Files -ExcelFilePath $group.ExcelFilePath -Type $Type -MonthKey $group.MonthKey -ModulePath $modulePathItem
+            }
+            catch {
+                $exportError = "Failed writing the Excel file: $_"
+
+                Write-Warning "Excel file '$($group.ExcelFilePath)': $exportError"
+
+                foreach ($groupFile in $group.Files) {
+                    [PSCustomObject]@{
+                        DateTime       = Get-Date
+                        File           = $groupFile
+                        ExcelFilePath  = $group.ExcelFilePath
+                        MonthKey       = $group.MonthKey
+                        AddedToSheet   = $false
+                        AlreadyInSheet = $false
+                        NothingToAdd   = $false
+                        RowsAdded      = 0
+                        Error          = $exportError
+                    }
+                }
+            }
         }
 
         $MaxConcurrentJobs = [int]$config.MaxConcurrentJobs.CreateExcelFile

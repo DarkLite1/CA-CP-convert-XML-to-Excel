@@ -105,6 +105,17 @@ function Open-ExcelWorkbookHC {
             }
         }
         catch {
+            <#
+                The package was opened before the worksheets were checked, so it
+                is released here. Without this the file stays open for as long
+                as the process lives, and the next run finds a workbook it
+                cannot touch on top of the problem it was already reporting.
+            #>
+            if ($workbook.Package) {
+                $workbook.Package.Dispose()
+                $workbook.Package = $null
+            }
+
             throw "Failed opening Excel file '$Path': $_"
         }
         #endregion
