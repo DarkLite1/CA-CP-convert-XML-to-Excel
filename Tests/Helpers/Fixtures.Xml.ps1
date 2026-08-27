@@ -67,6 +67,12 @@ function New-BatchXmlHC {
         <delivery>
           <deliveryHeader>
             <load_id_erp>ERP-1</load_id_erp>
+            <!-- An order number with leading zeros and an identifier too long
+                 to survive a double: both are damaged the moment they are
+                 turned into a number, so every batch file built here carries
+                 the case. -->
+            <load_order_number>0000123456</load_order_number>
+            <load_id_bcc>1234567890123456789</load_id_bcc>
             <load_mix_name>Mix</load_mix_name>
             <load_start_date>$date</load_start_date>
             <load_end_date></load_end_date>

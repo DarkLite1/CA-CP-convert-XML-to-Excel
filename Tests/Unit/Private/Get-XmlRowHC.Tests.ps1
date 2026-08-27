@@ -7,6 +7,7 @@ BeforeAll {
 
     # Row builders and their helper dependencies
     . "$moduleRoot\Private\ConvertTo-CorrectTypeHC.ps1"
+    . "$moduleRoot\Private\ConvertTo-TextHC.ps1"
     . "$moduleRoot\Private\ConvertTo-DateTimeHC.ps1"
     . "$moduleRoot\Private\Get-MonthKeyHC.ps1"
     . "$moduleRoot\Private\XmlRow.ps1"
@@ -65,6 +66,47 @@ Describe 'Get-XmlRowHC' {
             $rows = @(Get-XmlRowHC @splat -MonthKey '202401 January')
 
             @($rows.Where({ $_.Key -eq 'plant' })) | Should-BeCollection @()
+        }
+    }
+
+    Context 'the type a cell gets' {
+        <#
+            An identifier turned into a number is damaged the moment it is
+            written and cannot be repaired afterwards, so the delivery row is
+            checked value by value: identifiers as text, quantities as numbers.
+        #>
+        BeforeAll {
+            $xml = New-BatchXmlHC -LoadStartDate '2024-08-16T09:30:00'
+
+            $rows = @(Get-XmlRowHC -Xml $xml -Type 'Batch' `
+                    -MonthKey '202408 August' -FileName 'File.xml' `
+                    -AddedOn ([datetime]'2024-10-01'))
+
+            $script:delivery = $rows.Where({ $_.Key -eq 'delivery' })[0]
+        }
+
+        It 'keeps the leading zeros of an order number' {
+            $delivery.Cells['J'] | Should-Be '0000123456'
+            $delivery.Cells['J'] | Should-HaveType ([string])
+        }
+
+        It 'keeps every digit of an identifier too long for a double' {
+            <#
+                As a double this value comes back as 1.23456789012346E+18, so
+                the last digits are gone. Compared as text for that reason.
+            #>
+            $delivery.Cells['I'] | Should-Be '1234567890123456789'
+            $delivery.Cells['I'] | Should-HaveType ([string])
+        }
+
+        It 'keeps a quantity as a real number, so Excel can total it' {
+            $delivery.Cells['R'] | Should-Be 10
+            $delivery.Cells['R'] | Should-HaveType ([double])
+        }
+
+        It 'keeps the batch id as text and its counter as a number' {
+            $delivery.Cells['AE'] | Should-HaveType ([string])
+            $delivery.Cells['AF'] | Should-HaveType ([double])
         }
     }
 

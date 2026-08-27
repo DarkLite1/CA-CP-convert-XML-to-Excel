@@ -20,6 +20,26 @@
         A plant row is only returned for a batch computer that actually has
         records in the requested month. Without this an Excel file would show a
         plant and batch computer that has no rows anywhere else in the workbook.
+
+        Two aliases decide the type of a cell, and which one a value gets is a
+        statement about what that value IS:
+
+        - 'Convert' (ConvertTo-CorrectTypeHC) is for values that are measured,
+          counted or answered with yes or no: quantities, times, temperatures,
+          percentages, flags. Those become a real number or a real boolean, so
+          Excel can sort and total them.
+
+        - 'Text' (ConvertTo-TextHC) is for values that identify or describe
+          something: identifiers, codes, order and reference numbers, license
+          plates, names and messages. Those stay text even when they consist of
+          digits only, because a number is the wrong shape for them: an order
+          number '0000123456' loses its leading zeros and an 18 digit
+          identifier loses its last digits to the precision of a double. Both
+          are silent and neither can be repaired after the Excel file is
+          written.
+
+        In doubt the value is an identifier: an identifier stored as text is
+        merely unsortable, while an identifier stored as a number is wrong.
 #>
 
 function Get-ChildValueMapHC {
@@ -107,6 +127,7 @@ function Get-XmlRowHC {
     )
 
     Set-Alias -Name 'Convert' -Value ConvertTo-CorrectTypeHC
+    Set-Alias -Name 'Text' -Value ConvertTo-TextHC
 
     #region Get plantHeader
     <#
@@ -244,6 +265,7 @@ function Get-BatchRowHC {
     )
 
     Set-Alias -Name 'Convert' -Value ConvertTo-CorrectTypeHC
+    Set-Alias -Name 'Text' -Value ConvertTo-TextHC
 
     <#
         Worked out once instead of formatting the date of every record into a
@@ -292,18 +314,23 @@ function Get-BatchRowHC {
             load_truck             = $header['load_truck']
             license_plate          = $header['license_plate']
             ticket_leading_system  = $header['ticket_leading_system']
-            load_id_erp            = Convert $header['load_id_erp']
-            reference_delivery     = Convert $header['reference_delivery']
-            original_delivery      = Convert $header['original_delivery']
-            load_id_bcc            = Convert $header['load_id_bcc']
-            load_order_number      = Convert $header['load_order_number']
-            load_order_number_item = Convert $header['load_order_number_item']
-            load_mix_code          = Convert $header['load_mix_code']
+            <#
+                Identifiers and codes, kept as text. These come from the source
+                system and have to keep matching it, leading zeros and all.
+            #>
+            load_id_erp            = Text $header['load_id_erp']
+            reference_delivery     = Text $header['reference_delivery']
+            original_delivery      = Text $header['original_delivery']
+            load_id_bcc            = Text $header['load_id_bcc']
+            load_order_number      = Text $header['load_order_number']
+            load_order_number_item = Text $header['load_order_number_item']
+            load_mix_code          = Text $header['load_mix_code']
+            ticket_id              = Text $header['ticket_id']
+            # Quantities, so real numbers
             load_qty               = Convert $header['load_qty']
             load_qty_erp           = Convert $header['load_qty_erp']
             load_qty_prod          = Convert $header['load_qty_prod']
             reuse_qty              = Convert $header['reuse_qty']
-            ticket_id              = Convert $header['ticket_id']
             batch_count            = Convert $header['batch_count']
             load_end_date          = ConvertTo-DateTimeHC $header['load_end_date']
             ticket_time            = ConvertTo-DateTimeHC $header['ticket_time']
@@ -334,7 +361,12 @@ function Get-BatchRowHC {
                     is still read from the node. It is iterated further down.
                 #>
                 dischargingOperationTimes = $batchHeaderNode.dischargingOperationTimes
-                batch_id                  = Convert $header['batch_id']
+                <#
+                    'batch_id' identifies the batch, so it is text.
+                    'batch_id_nr' is the counter of the batch within its
+                    delivery, so it stays a number.
+                #>
+                batch_id                  = Text $header['batch_id']
                 batch_id_nr               = Convert $header['batch_id_nr']
                 qty                       = Convert $header['qty']
                 water_trim                = Convert $header['water_trim']
@@ -421,9 +453,9 @@ function Get-BatchRowHC {
                         A = $FileName
                         B = $PlantHeader.plant_code
                         C = $PlantHeader.plant_name
-                        D = Convert $discharging['batch_id']
+                        D = Text $discharging['batch_id']
                         E = Convert $discharging['batch_id_nr']
-                        F = Convert $discharging['scale_id']
+                        F = Text $discharging['scale_id']
                         G = $discharging['material_type']
                         H = ConvertTo-DateTimeHC $discharging['discharge_start_time']
                         I = ConvertTo-DateTimeHC $discharging['discharge_end_time']
@@ -487,7 +519,7 @@ function Get-BatchRowHC {
                         AG = $batchHeader.aborted
                         AH = Convert $itemInformation['pulsecount']
                         AI = $itemInformation['moisture_measure_type']
-                        AJ = Convert $item['material_code']
+                        AJ = Text $item['material_code']
                         AK = $item['material_name']
                         AL = $item['vendor']
                         AM = $item['vendor_source']
@@ -514,7 +546,7 @@ function Get-BatchRowHC {
                         BH = $item['material_temperature_unit']
                         BI = Convert $item['material_bin_number']
                         BJ = $item['material_bin_name']
-                        BK = Convert $item['scale_id']
+                        BK = Text $item['scale_id']
                         BL = $dosing['material_dosing_start_time']
                         BM = $dosing['material_dosing_end_time']
                     }
@@ -552,6 +584,7 @@ function Get-AlarmRowHC {
     )
 
     Set-Alias -Name 'Convert' -Value ConvertTo-CorrectTypeHC
+    Set-Alias -Name 'Text' -Value ConvertTo-TextHC
 
     <#
         Worked out once instead of formatting the date of every record into a
@@ -593,28 +626,33 @@ function Get-AlarmRowHC {
                 C  = $PlantHeader.plant_name
                 D  = $null
                 E  = $BatchComputerHeader.extraction_id
-                F  = Convert $alarmMap['Id']
+                F  = Text $alarmMap['Id']
                 G  = $alarmRaised
                 H  = ConvertTo-DateTimeHC $alarmMap['dropped']
                 I  = ConvertTo-DateTimeHC $alarmMap['handled']
                 J  = ConvertTo-DateTimeHC $alarmMap['clicktimestamp']
-                K  = Convert $alarmMap['text']
-                L  = Convert $alarmMap['alarm_message']
-                M  = Convert $alarmMap['message']
-                N  = Convert $alarmMap['parameter']
-                O  = Convert $ticket['Id']
-                P  = Convert $ticket['Code']
-                Q  = Convert $ticket['Reference']
-                R  = Convert $ticket['Customer']
-                S  = Convert $ticket['Project']
+                <#
+                    Alarm and ticket text, kept as text. An alarm message that
+                    happens to hold nothing but digits is still a message, and
+                    'Truck' is a license plate.
+                #>
+                K  = Text $alarmMap['text']
+                L  = Text $alarmMap['alarm_message']
+                M  = Text $alarmMap['message']
+                N  = Text $alarmMap['parameter']
+                O  = Text $ticket['Id']
+                P  = Text $ticket['Code']
+                Q  = Text $ticket['Reference']
+                R  = Text $ticket['Customer']
+                S  = Text $ticket['Project']
                 T  = Convert $ticket['Wanted']
-                U  = Convert $ticket['Truck']
-                V  = Convert $batch['Id']
+                U  = Text $ticket['Truck']
+                V  = Text $batch['Id']
                 W  = ConvertTo-DateTimeHC $batch['TimeStart']
                 X  = ConvertTo-DateTimeHC $batch['TimeReady']
                 Y  = Convert $batch['Wanted']
-                Z  = Convert $batch['WeighListCode']
-                AA = Convert $batch['WeighListName']
+                Z  = Text $batch['WeighListCode']
+                AA = Text $batch['WeighListName']
                 AB = if ($alarm.alarmGroups.alarmGroup.Code) {
                     $alarm.alarmGroups.alarmGroup.Code -join ','
                 }
@@ -656,6 +694,7 @@ function Get-SequenceRowHC {
     )
 
     Set-Alias -Name 'Convert' -Value ConvertTo-CorrectTypeHC
+    Set-Alias -Name 'Text' -Value ConvertTo-TextHC
 
     #region Only batch computers created in the requested month
     $fileCreatedOn = $BatchComputerHeader.file_created_on
@@ -690,7 +729,7 @@ function Get-SequenceRowHC {
             name             = $sequenceParameterMap['name']
             baseName         = $sequenceParameterMap['baseName']
             maxBatchSizeUnit = $sequenceParameterMap['maxBatchSizeUnit']
-            ID               = Convert $sequenceParameterMap['ID']
+            ID               = Text $sequenceParameterMap['ID']
             NrofSubBatches   = Convert $sequenceParameterMap['NrofSubBatches']
             maxbatchsize     = Convert $sequenceParameterMap['maxbatchsize']
             blocked          = Convert $sequenceParameterMap['blocked']
@@ -698,7 +737,7 @@ function Get-SequenceRowHC {
         #endregion
 
         foreach ($subBatch in $sequenceParameter.subBatches.subBatch) {
-            $subBatchName = Convert $subBatch.name
+            $subBatchName = Text $subBatch.name
 
             foreach ($property in $subBatch.properties.property) {
                 <#
