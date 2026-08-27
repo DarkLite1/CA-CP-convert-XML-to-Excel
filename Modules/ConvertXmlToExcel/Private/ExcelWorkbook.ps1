@@ -490,6 +490,24 @@ function Format-ExcelWorkbookHC {
 
                         if ($table = $sheet.Worksheet.Tables[$tableName]) {
                             $table.TableXml.table.ref = $range
+
+                            <#
+                                The filter of a table carries its own range and
+                                Excel expects the two to say the same thing.
+                                Growing only the table left the filter on the
+                                range of the run before, so the rows added last
+                                fell outside it and Excel could refuse to open
+                                the workbook without repairing it first, which
+                                is how a month's file is lost.
+
+                                Tested for rather than assumed: a table without
+                                a header row has no filter to grow.
+                            #>
+                            $autoFilter = $table.TableXml.table.autoFilter
+
+                            if ($autoFilter) {
+                                $autoFilter.ref = $range
+                            }
                         }
                         else {
                             $table = $sheet.Worksheet.Tables.Add(
