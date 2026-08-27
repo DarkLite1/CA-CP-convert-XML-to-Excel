@@ -46,6 +46,29 @@ Describe 'Get-FileNameInWorkbookHC' {
         $result.Keys.Count | Should-Be 0
     }
 
+    It 'returns an empty hashtable for a worksheet with no cells at all' {
+        <#
+            EPPlus reports no dimension for a worksheet that holds nothing, so
+            there is no last row to read. Reading through it threw and took the
+            whole run with it.
+        #>
+        $workbook = @{
+            PlantKey = 'plant'
+            Sheet    = @{
+                plant = @{
+                    Worksheet = [PSCustomObject]@{
+                        Cells     = @{}
+                        Dimension = $null
+                    }
+                }
+            }
+        }
+
+        $result = Get-FileNameInWorkbookHC -Workbook $workbook
+
+        $result.Keys.Count | Should-Be 0
+    }
+
     It 'reports a file name that is present' {
         $workbook = New-FakePlantWorkbook -FileNames @('A.xml', 'B.xml')
 

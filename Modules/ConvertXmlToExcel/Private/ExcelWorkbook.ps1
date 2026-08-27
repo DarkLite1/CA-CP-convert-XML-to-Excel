@@ -69,6 +69,26 @@ function Open-ExcelWorkbookHC {
                     throw "Worksheet '$($definition.Name)' not found"
                 }
 
+                <#
+                    A worksheet that holds nothing at all has no 'Dimension',
+                    and one that lost its header rows reports a last row below
+                    the two rows every worksheet of this script starts with.
+
+                    Both are refused instead of being worked around. Reading
+                    'Dimension.End.Row + 1' on an empty worksheet gives row 1,
+                    so the next write would land on top of the header rows and
+                    the damage would only show up in the Excel file, long after
+                    the run reported success. A workbook in that state was
+                    emptied or edited by hand, which is a manual action, so it
+                    is named here as one.
+                #>
+                if (
+                    (-not $worksheet.Dimension) -or
+                    ($worksheet.Dimension.End.Row -lt 2)
+                ) {
+                    throw "Worksheet '$($definition.Name)' is empty, its header rows are missing"
+                }
+
                 $workbook.Sheet[$definition.Key] = @{
                     Definition = $definition
                     Worksheet  = $worksheet
@@ -227,7 +247,16 @@ function Get-FileNameInWorkbookHC {
 
     $worksheet = $Workbook.Sheet[$Workbook.PlantKey].Worksheet
 
-    $lastRow = $worksheet.Dimension.End.Row
+    <#
+        A worksheet with no cells at all has no 'Dimension', so it is read
+        before the last row and not through it. Nothing was ever added to such
+        a worksheet, which is exactly what an empty result says.
+    #>
+    $dimension = $worksheet.Dimension
+
+    if (-not $dimension) { return $fileNames }
+
+    $lastRow = $dimension.End.Row
 
     if ($lastRow -lt 3) { return $fileNames }
 
@@ -388,7 +417,19 @@ function Remove-FileFromWorkbookHC {
     foreach ($key in $Workbook.Sheet.Keys) {
         $sheet = $Workbook.Sheet[$key]
 
-        $lastRow = $sheet.Worksheet.Dimension.End.Row
+        <#
+            Removing rows can empty a worksheet completely, and a worksheet
+            with no cells has no 'Dimension' at all, so it is tested for before
+            a row number is read from it.
+        #>
+        $dimension = $sheet.Worksheet.Dimension
+
+        if (-not $dimension) {
+            $sheet.RowNumber = 3
+            Continue
+        }
+
+        $lastRow = $dimension.End.Row
 
         if ($lastRow -lt 3) { Continue }
 
@@ -401,7 +442,15 @@ function Remove-FileFromWorkbookHC {
             $sheet.Worksheet.DeleteRow($rowNumber)
         }
 
-        $sheet.RowNumber = $sheet.Worksheet.Dimension.End.Row + 1
+        <#
+            The header rows survive the deletion, so the dimension is normally
+            still there and the next write lands right below the rows that are
+            left. The fallback is the first data row, which is where writing
+            starts on a worksheet that holds nothing.
+        #>
+        $dimension = $sheet.Worksheet.Dimension
+
+        $sheet.RowNumber = if ($dimension) { $dimension.End.Row + 1 } else { 3 }
     }
 }
 

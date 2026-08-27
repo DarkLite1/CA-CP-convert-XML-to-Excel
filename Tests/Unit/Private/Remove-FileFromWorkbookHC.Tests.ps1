@@ -73,6 +73,26 @@ Describe 'Remove-FileFromWorkbookHC' {
         finally { Close-ExcelPackage $workbook.Package -NoSave }
     }
 
+    It 'puts the row number back on the first data row when every row goes' {
+        <#
+            The header rows stay behind, so the next write has to land on row 3
+            again. This is the path that empties a worksheet completely, which
+            is where reading the last row without checking for it first used to
+            be a problem.
+        #>
+        $workbook = New-FilledWorkbookHC -FileNames 'A.xml', 'A.xml'
+
+        try {
+            Remove-FileFromWorkbookHC -Workbook $workbook -FileName 'A.xml'
+
+            $workbook.Sheet['plant'].RowNumber | Should-Be 3
+
+            (Get-FileNameInWorkbookHC -Workbook $workbook).Keys |
+            Should-BeCollection -Count 0
+        }
+        finally { Close-ExcelPackage $workbook.Package -NoSave }
+    }
+
     It 'does nothing when the file is not in the workbook' {
         $workbook = New-FilledWorkbookHC -FileNames 'A.xml'
 

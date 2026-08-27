@@ -82,6 +82,38 @@ Describe 'Open-ExcelWorkbookHC' {
         }
     }
 
+    Context 'a worksheet of an existing file is empty' {
+        <#
+            A workbook that was emptied or edited by hand. Reading the last row
+            of a worksheet with no cells gives nothing, and the old fallback of
+            'last row + 1' then started writing on row 1, straight over the two
+            header rows, while the run reported success.
+        #>
+        BeforeEach {
+            $script:path = Join-Path $TestDrive "emptied_$(New-Guid).xlsx"
+
+            $workbook = Open-ExcelWorkbookHC -Path $path -Type 'Batch'
+            Close-ExcelPackage $workbook.Package
+
+            $package = Open-ExcelPackage -Path $path
+
+            try {
+                $package.Workbook.Worksheets.Delete('plantBatchComputers')
+                $null = $package.Workbook.Worksheets.Add('plantBatchComputers')
+            }
+            finally { Close-ExcelPackage $package }
+        }
+
+        It 'refuses to open it' {
+            { Open-ExcelWorkbookHC -Path $path -Type 'Batch' } | Should-Throw
+        }
+
+        It 'names the worksheet and the reason' {
+            { Open-ExcelWorkbookHC -Path $path -Type 'Batch' } |
+            Should-Throw -ExceptionMessage '*plantBatchComputers*header rows are missing*'
+        }
+    }
+
     It 'rejects an unknown type' {
         { Open-ExcelWorkbookHC -Path (Join-Path $TestDrive 'x.xlsx') -Type 'Nope' } |
         Should-Throw
