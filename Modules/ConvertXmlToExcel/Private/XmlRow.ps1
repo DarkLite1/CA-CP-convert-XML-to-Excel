@@ -547,8 +547,17 @@ function Get-BatchRowHC {
                         BI = Convert $item['material_bin_number']
                         BJ = $item['material_bin_name']
                         BK = Text $item['scale_id']
-                        BL = $dosing['material_dosing_start_time']
-                        BM = $dosing['material_dosing_end_time']
+                        <#
+                            Real dates, like every other timestamp in the
+                            workbook. Written as they came out of the XML file
+                            these two were the only ones left as text, so Excel
+                            treated them as a label: they sorted alphabetically,
+                            a date filter did not see them and a difference
+                            between the two could not be worked out without
+                            converting the column by hand first.
+                        #>
+                        BL = ConvertTo-DateTimeHC $dosing['material_dosing_start_time']
+                        BM = ConvertTo-DateTimeHC $dosing['material_dosing_end_time']
                     }
                 }
             }

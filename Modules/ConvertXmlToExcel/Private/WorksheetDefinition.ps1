@@ -184,7 +184,13 @@ function Get-WorksheetDefinitionHC {
                         'materialBinNumber', 'materialBinName', 'scaleId',
                         'materialDosingStartTime', 'materialDosingEndTime'
                     )
-                    DateColumns    = @('P', 'Q', 'AA')
+                    <#
+                        'BL' and 'BM' are the dosing start and end times, which
+                        are written as real dates like every other timestamp.
+                        A column that holds dates and is missing here shows the
+                        raw serial number of the date instead of the date.
+                    #>
+                    DateColumns    = @('P', 'Q', 'AA', 'BL', 'BM')
                     FreezeRow      = 2
                 }
             )

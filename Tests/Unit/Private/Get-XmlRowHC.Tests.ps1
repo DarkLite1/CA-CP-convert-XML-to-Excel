@@ -83,6 +83,7 @@ Describe 'Get-XmlRowHC' {
                     -AddedOn ([datetime]'2024-10-01'))
 
             $script:delivery = $rows.Where({ $_.Key -eq 'delivery' })[0]
+            $script:item = $rows.Where({ $_.Key -eq 'item' })[0]
         }
 
         It 'keeps the leading zeros of an order number' {
@@ -107,6 +108,17 @@ Describe 'Get-XmlRowHC' {
         It 'keeps the batch id as text and its counter as a number' {
             $delivery.Cells['AE'] | Should-HaveType ([string])
             $delivery.Cells['AF'] | Should-HaveType ([double])
+        }
+
+        It 'writes the dosing times as real dates' {
+            <#
+                These two were the only timestamps left as text, so they sorted
+                alphabetically and a date filter did not see them.
+            #>
+            $item.Cells['BL'] | Should-HaveType ([datetime])
+            $item.Cells['BM'] | Should-HaveType ([datetime])
+
+            $item.Cells['BL'] | Should-Be ([datetime]'2024-08-16T09:31:00')
         }
     }
 

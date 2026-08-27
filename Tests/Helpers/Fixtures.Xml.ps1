@@ -56,7 +56,19 @@ function New-BatchXmlHC {
                 <batch_id_nr>1</batch_id_nr>
                 <qty>10</qty>
               </batchHeader>
-              <batchItems></batchItems>
+              <batchItems>
+                <batchItem>
+                  <material_code>0012</material_code>
+                  <material_name>Sand</material_name>
+                  <material_amount>500</material_amount>
+                  <dosingOperationTimes>
+                    <dosing>
+                      <material_dosing_start_time>2024-08-16T09:31:00</material_dosing_start_time>
+                      <material_dosing_end_time>2024-08-16T09:31:20</material_dosing_end_time>
+                    </dosing>
+                  </dosingOperationTimes>
+                </batchItem>
+              </batchItems>
             </batch>
           </batches>
 "@

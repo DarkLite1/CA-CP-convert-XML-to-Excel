@@ -46,6 +46,33 @@ Describe 'Get-WorksheetDefinitionHC' {
         }
     }
 
+    Context 'every column holding a date carries the date format' {
+        <#
+            The row builder decides which cells hold a real date, this
+            definition decides which columns are formatted as one. A column
+            missing here shows the serial number of the date instead of the
+            date itself.
+        #>
+        It 'formats the dosing times of the batch items' {
+            $batchItems = @(Get-WorksheetDefinitionHC -Type 'Batch').Where(
+                { $_.Key -eq 'item' }
+            )[0]
+
+            $batchItems.DateColumns | Should-ContainCollection 'BL'
+            $batchItems.DateColumns | Should-ContainCollection 'BM'
+        }
+
+        It 'formats the load dates and the ticket time of the batch items' {
+            $batchItems = @(Get-WorksheetDefinitionHC -Type 'Batch').Where(
+                { $_.Key -eq 'item' }
+            )[0]
+
+            $batchItems.DateColumns | Should-ContainCollection 'P'
+            $batchItems.DateColumns | Should-ContainCollection 'Q'
+            $batchItems.DateColumns | Should-ContainCollection 'AA'
+        }
+    }
+
     It 'rejects an unknown type' {
         { Get-WorksheetDefinitionHC -Type 'Nope' } | Should-Throw
     }
