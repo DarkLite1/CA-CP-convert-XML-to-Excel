@@ -18,6 +18,11 @@
         anymore because a worksheet reached the maximum number of rows, nothing
         is written for that file and an error is returned.
 
+        Every XML file handed in returns one result, which reports the outcome
+        for this month with one of 'AddedToSheet', 'AlreadyInSheet' or
+        'NothingToAdd', or with 'Error'. 'NothingToAdd' means the file was read
+        without a problem and holds no rows for this month.
+
         This script does not move XML files to the archive folder. Because one
         XML file can be written to more than one Excel file, the file may only
         be archived after every Excel file has been handled. The orchestrator
@@ -89,6 +94,7 @@ Process {
                 MonthKey       = $MonthKey
                 AddedToSheet   = $false
                 AlreadyInSheet = $false
+                NothingToAdd   = $false
                 RowsAdded      = 0
                 Error          = $null
             }
@@ -123,8 +129,22 @@ Process {
             #endregion
 
             #region Nothing to add for this month
+            <#
+                A month key can be found for a record whose children produce no
+                rows at all: a delivery loaded in this month that holds no
+                batches, or a batch computer created in this month that holds no
+                sequence parameters. The file was read correctly and there is
+                simply nothing to write, so this is a success and not a gap.
+
+                'NothingToAdd' says so explicitly. Without it the orchestrator
+                sees a month that was neither added nor already present, refuses
+                to archive the file, and reports it again on every following
+                run, because nothing about the file will ever change.
+            #>
             if (-not $rows.Count) {
                 Write-Verbose "XML file $i/$($XmlFiles.Count) '$($file.Name)': no records for month '$MonthKey'"
+
+                $result.NothingToAdd = $true
 
                 Continue
             }

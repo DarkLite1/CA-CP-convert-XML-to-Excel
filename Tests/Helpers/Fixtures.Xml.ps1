@@ -21,14 +21,46 @@ function New-BatchXmlHC {
             One or more 'load_start_date' values. One delivery is created per
             value. Pass an empty string to create a delivery without a date.
 
+        .PARAMETER WithoutBatches
+            Build every delivery with an empty 'batches' element.
+
+            The month of a batch file is read from the delivery date, but the
+            rows come from the batches under that delivery. A delivery without
+            batches therefore gives a month that holds no rows at all, which is
+            a valid file and not a failure.
+
         .EXAMPLE
             New-BatchXmlHC -LoadStartDate '2024-08-16T09:00:00', '2024-09-02T08:00:00'
+
+        .EXAMPLE
+            New-BatchXmlHC -LoadStartDate '2024-08-16T09:00:00' -WithoutBatches
+
+            A file with a delivery loaded in August that produces no rows.
     #>
     param (
         [Parameter(Mandatory)]
         [AllowEmptyString()]
-        [String[]]$LoadStartDate
+        [String[]]$LoadStartDate,
+        [Switch]$WithoutBatches
     )
+
+    $batches = if ($WithoutBatches) {
+        '<batches></batches>'
+    }
+    else {
+        @"
+          <batches>
+            <batch>
+              <batchHeader>
+                <batch_id>B1</batch_id>
+                <batch_id_nr>1</batch_id_nr>
+                <qty>10</qty>
+              </batchHeader>
+              <batchItems></batchItems>
+            </batch>
+          </batches>
+"@
+    }
 
     $deliveries = foreach ($date in $LoadStartDate) {
         @"
@@ -40,16 +72,7 @@ function New-BatchXmlHC {
             <load_end_date></load_end_date>
             <load_qty>10</load_qty>
           </deliveryHeader>
-          <batches>
-            <batch>
-              <batchHeader>
-                <batch_id>B1</batch_id>
-                <batch_id_nr>1</batch_id_nr>
-                <qty>10</qty>
-              </batchHeader>
-              <batchItems></batchItems>
-            </batch>
-          </batches>
+          $batches
         </delivery>
 "@
     }

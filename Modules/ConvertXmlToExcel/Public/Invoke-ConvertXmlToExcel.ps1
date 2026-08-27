@@ -375,6 +375,15 @@ function Invoke-ConvertXmlToExcel {
             problem is solved the next run picks the file up again. The Excel
             files it was already added to are not written twice, because the
             file name is checked before adding.
+
+            'NothingToAdd' counts as a handled month, just like a month that was
+            added or that was already in the workbook. A month key is read from
+            the date of a record while the rows come from the children of that
+            record, so a record without children gives a month with no rows: a
+            delivery loaded this month holding no batches, or a batch computer
+            created this month holding no sequence parameters. Treating that as
+            a missing month left the file in the folder and reported it on every
+            run, forever, because nothing about the file would ever change.
         #>
         $archiveFolder = Join-Path $XmlFilesFolder 'Archive'
 
@@ -415,8 +424,9 @@ function Invoke-ConvertXmlToExcel {
                 ) -join ' | '
             }
             elseif (
-                $fileResults.where({ $_.AddedToSheet -or $_.AlreadyInSheet }).Count -ne
-                $fileDate.MonthKeys.Count
+                $fileResults.where(
+                    { $_.AddedToSheet -or $_.AlreadyInSheet -or $_.NothingToAdd }
+                ).Count -ne $fileDate.MonthKeys.Count
             ) {
                 $reason = 'Not all months of this XML file were written to an Excel file'
             }
@@ -569,6 +579,7 @@ function Invoke-ConvertXmlToExcel {
                     ExcelFile      = $null
                     AlreadyInSheet = $false
                     AddedToSheet   = $false
+                    NothingToAdd   = $false
                     RowsAdded      = 0
                     Archived       = $isArchived
                     ArchivedAs     = $archivedAs
@@ -592,6 +603,12 @@ function Invoke-ConvertXmlToExcel {
                     ExcelFile      = $(if ($result.ExcelFilePath) { Split-Path $result.ExcelFilePath -Leaf })
                     AlreadyInSheet = $result.AlreadyInSheet
                     AddedToSheet   = $result.AddedToSheet
+                    <#
+                        A real boolean here too, so a row that added nothing can
+                        be told apart from a row that failed: the file was read
+                        correctly and holds no records for this month.
+                    #>
+                    NothingToAdd   = [Boolean]$result.NothingToAdd
                     RowsAdded      = $result.RowsAdded
                     Archived       = $isArchived
                     ArchivedAs     = $archivedAs

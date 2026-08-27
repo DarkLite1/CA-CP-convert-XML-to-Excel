@@ -36,7 +36,8 @@ orchestrator does, and reads the resulting `.xlsx` files back to prove:
 - one XML file produces two monthly Excel files,
 - each file holds only its own month's delivery,
 - a second run adds nothing (the duplicate check works per file per workbook),
-- a month with no records produces no rows.
+- a month with no records produces no rows,
+- a delivery without batches reports `NothingToAdd` instead of an error.
 
 `Batch.Tests.ps1`, `Alarm.Tests.ps1` and `Sequence.Tests.ps1` run the whole
 orchestrator once per type. They are deliberately the same four scenarios, so a
@@ -59,13 +60,15 @@ back, covering what happens to a file after conversion:
 - the same file delivered again with the same content, archived as a duplicate,
 - the same name with different content, left behind for a manual action,
 - a file without a usable date,
+- a delivery without batches, archived even though it produced no rows,
 - a file with records in two months.
 
 ### Helpers/
 
-`Fixtures.Xml.ps1` provides `New-BatchXmlHC` and `New-AlarmXmlHC`, which build
-minimal XML documents in the exact shape the row builders consume, including the
-odd cases (a file spanning two months, a record with no date). It sits at the
+`Fixtures.Xml.ps1` provides `New-BatchXmlHC`, `New-AlarmXmlHC` and
+`New-SequenceXmlHC`, which build minimal XML documents in the exact shape the
+row builders consume, including the odd cases (a file spanning two months, a
+record with no date, a delivery without batches). It sits at the
 `Tests` root because both the unit and the integration tests use it.
 
 ## Running

@@ -102,4 +102,29 @@ Describe 'Fanout end to end' {
 
         $result.AddedToSheet | Should-BeFalse
     }
+
+    It 'reports NothingToAdd for a delivery that holds no batches' {
+        <#
+            The month comes from the delivery date while the rows come from the
+            batches under it, so a delivery without batches gives a month with
+            no rows. The file was read correctly, so this has to be reported as
+            a third success state and not as a month that went missing: the
+            orchestrator refuses to archive a file whose months were not all
+            handled, and no later run would ever change the outcome.
+        #>
+        $emptyXml = New-BatchXmlHC -LoadStartDate '2024-08-16T09:30:00' -WithoutBatches
+        $emptyPath = Join-Path $xmlFolder.FullName 'NoBatches.xml'
+        $emptyXml.Save($emptyPath)
+
+        $xlsx = Join-Path $excelFolder.FullName 'Batches - 202408 August.xlsx'
+
+        $result = & $export -XmlFiles (Get-Item $emptyPath) -ExcelFilePath $xlsx `
+            -Type 'Batch' -MonthKey '202408 August' -ModulePath $modulePath
+
+        $result.Error | Should-BeFalsy
+        $result.AddedToSheet | Should-BeFalse
+        $result.AlreadyInSheet | Should-BeFalse
+        $result.NothingToAdd | Should-BeTrue
+        $result.RowsAdded | Should-Be 0
+    }
 }

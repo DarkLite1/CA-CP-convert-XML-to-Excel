@@ -239,6 +239,53 @@ Describe 'Overview.xlsx' {
         }
     }
 
+    Context 'a delivery that holds no batches' {
+        <#
+            The month of a batch file is read from the delivery date while the
+            rows come from the batches under that delivery, so this file gives a
+            month that holds no rows at all. It was read without a problem, so
+            it has to be archived like any other converted file.
+
+            Before 'NothingToAdd' existed the orchestrator saw a month that was
+            neither added nor already present, left the file in the folder and
+            reported it as an error. Nothing about the file would ever change,
+            so it was reported again on every following run.
+        #>
+        BeforeAll {
+            $script:run = New-TestRunHC
+            (New-BatchXmlHC -LoadStartDate '2024-08-16T09:30:00' -WithoutBatches).Save(
+                (Join-Path $run.Xml 'NoBatches.xml'))
+
+            Invoke-TestRunHC -Run $run
+            $script:row = (Get-OverviewHC -Run $run)[0]
+        }
+
+        It 'reports that there was nothing to add' {
+            $row.NothingToAdd | Should-BeTrue
+            $row.AddedToSheet | Should-BeFalse
+            $row.AlreadyInSheet | Should-BeFalse
+            $row.RowsAdded | Should-Be 0
+        }
+
+        It 'archives the file' {
+            $row.Archived | Should-BeTrue
+            $row.ArchivedAs | Should-Be 'NoBatches.xml'
+        }
+
+        It 'leaves the error empty' {
+            $row.Error | Should-BeFalsy
+        }
+
+        It 'raises no error, so it is not reported again on the next run' {
+            $run.Errors | Should-BeCollection -Count 0
+        }
+
+        It 'empties the folder, so the file is not seen again next run' {
+            @(Get-ChildItem -LiteralPath $run.Xml -Filter '*.xml' -File) |
+            Should-BeCollection -Count 0
+        }
+    }
+
     Context 'a file with records in two months' {
         BeforeAll {
             $script:run = New-TestRunHC
