@@ -247,6 +247,16 @@ function Get-FileNameInWorkbookHC {
             though, an XML file is either fully added or not added at all, so
             checking the file name is enough and there is no need to compare
             each row.
+
+            Column A is read cell by cell with 'GetValue', which reads straight
+            from the cell store. Asking for the value of the range 'A3:A<last>'
+            built the whole column as an object array first, and sorting that
+            array to make the names unique then walked it again. This runs on
+            every workbook the run touches, before a single row is written, and
+            a monthly workbook grows towards a million rows, so the cost of
+            deciding what to add grew with the history instead of with the work.
+            The hash table already makes the names unique, so the sort was doing
+            nothing that was not done again straight after it.
     #>
     [CmdletBinding()]
     param (
@@ -271,9 +281,10 @@ function Get-FileNameInWorkbookHC {
 
     if ($lastRow -lt 3) { return $fileNames }
 
-    $worksheet.Cells["A3:A$lastRow"].Value | Sort-Object -Unique |
-    ForEach-Object {
-        if ($_) { $fileNames[$_] = $true }
+    for ($rowNumber = 3; $rowNumber -le $lastRow; $rowNumber++) {
+        $value = $worksheet.GetValue($rowNumber, 1)
+
+        if ($value) { $fileNames[$value] = $true }
     }
 
     $fileNames
@@ -444,9 +455,24 @@ function Remove-FileFromWorkbookHC {
 
         if ($lastRow -lt 3) { Continue }
 
-        $rowsToRemove = $sheet.Worksheet.Cells["A3:A$lastRow"].Where(
-            { $_.Value -eq $FileName }
-        ).Start.Row | Sort-Object -Descending -Unique
+        <#
+            Read cell by cell for the same reason as in Get-FileNameInWorkbookHC:
+            asking a range for its cells builds an object for every one of them,
+            on a worksheet that can hold a million rows.
+
+            Collected downwards and deleted upwards, because deleting a row
+            moves every row below it up, which would leave the numbers still to
+            come pointing at the wrong rows.
+        #>
+        $rowsToRemove = [System.Collections.Generic.List[Int]]::new()
+
+        for ($rowNumber = 3; $rowNumber -le $lastRow; $rowNumber++) {
+            if ($sheet.Worksheet.GetValue($rowNumber, 1) -eq $FileName) {
+                $rowsToRemove.Add($rowNumber)
+            }
+        }
+
+        $rowsToRemove.Reverse()
 
         foreach ($rowNumber in $rowsToRemove) {
             Write-Verbose "Remove row '$rowNumber' in sheet '$($sheet.Worksheet.Name)' for file '$FileName'"

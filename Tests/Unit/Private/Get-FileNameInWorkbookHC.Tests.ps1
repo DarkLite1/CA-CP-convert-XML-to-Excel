@@ -9,26 +9,34 @@ BeforeAll {
 
     <#
         A fake plant worksheet. Dimension.End.Row reports the last row and
-        Cells["A3:A{last}"].Value returns the file names in column A, matching
-        the shape EPPlus exposes.
+        GetValue(row, column) returns the value of one cell, matching the shape
+        EPPlus exposes. The file names sit in column A from row 3 down, below
+        the two header rows.
     #>
     function New-FakePlantWorkbook {
         param([string[]]$FileNames)
 
         $lastRow = 2 + $FileNames.Count
 
-        # EPPlus exposes Cells[range].Value; a hashtable keyed by the exact
-        # range string reproduces that indexing without a real workbook.
-        $cells = @{
-            "A3:A$lastRow" = [PSCustomObject]@{ Value = $FileNames }
-        }
-
         $worksheet = [PSCustomObject]@{
-            Cells     = $cells
             Dimension = [PSCustomObject]@{
                 End = [PSCustomObject]@{ Row = $lastRow }
             }
         }
+
+        <#
+            GetNewClosure, so the method keeps hold of the names it was built
+            with. Without it the script block would look for '$FileNames' when
+            it is called, long after this function returned, and find nothing.
+        #>
+        $worksheet | Add-Member -MemberType 'ScriptMethod' -Name 'GetValue' -Value {
+            param ($Row, $Column)
+
+            if ($Column -ne 1) { return $null }
+            if ($Row -lt 3) { return $null }
+
+            $FileNames[$Row - 3]
+        }.GetNewClosure()
 
         @{
             PlantKey = 'plant'
@@ -46,6 +54,26 @@ Describe 'Get-FileNameInWorkbookHC' {
         $result.Keys.Count | Should-Be 0
     }
 
+    It 'reads column A only' {
+        <#
+            The file name lives in column A. Reading any other column would
+            report a name that is not there and skip one that is.
+        #>
+        $workbook = New-FakePlantWorkbook -FileNames @('A.xml')
+
+        $workbook.Sheet['plant'].Worksheet |
+        Add-Member -MemberType 'ScriptMethod' -Name 'GetValue' -Force -Value {
+            param ($Row, $Column)
+
+            if ($Column -eq 1) { 'A.xml' } else { 'B.xml' }
+        }
+
+        $result = Get-FileNameInWorkbookHC -Workbook $workbook
+
+        $result.ContainsKey('A.xml') | Should-BeTrue
+        $result.ContainsKey('B.xml') | Should-BeFalse
+    }
+
     It 'returns an empty hashtable for a worksheet with no cells at all' {
         <#
             EPPlus reports no dimension for a worksheet that holds nothing, so
@@ -56,10 +84,7 @@ Describe 'Get-FileNameInWorkbookHC' {
             PlantKey = 'plant'
             Sheet    = @{
                 plant = @{
-                    Worksheet = [PSCustomObject]@{
-                        Cells     = @{}
-                        Dimension = $null
-                    }
+                    Worksheet = [PSCustomObject]@{ Dimension = $null }
                 }
             }
         }
