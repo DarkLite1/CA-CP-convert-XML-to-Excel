@@ -42,6 +42,14 @@ BeforeAll {
             MaxConcurrentJobs = @{ GetXmlFileDates = 1; CreateExcelFile = 1 }
             Path              = @{ XmlFiles = $run.Xml; ExcelFiles = $run.Excel }
             ExcelFileName     = 'Alarms - {0}.xlsx'
+            <#
+                Zero, because these tests write their XML file and convert it in
+                the same breath. A file is normally left alone for a few seconds
+                after it was last written to, in case it is still arriving, and
+                the tests would find nothing to convert. The waiting itself is
+                covered in Overview.Tests.ps1.
+            #>
+            SkipFilesModifiedWithinSeconds = 0
             Settings          = @{
                 ScriptName     = 'CP Alarm Test'
                 SendMail       = @{

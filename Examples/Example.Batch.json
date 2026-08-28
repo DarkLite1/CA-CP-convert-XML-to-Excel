@@ -9,6 +9,7 @@
     "ExcelFiles": "C:\\Excel Files folder\\Batch"
   },
   "ExcelFileName": "Batches - {0} - XML Files summary.xlsx",
+  "SkipFilesModifiedWithinSeconds": 5,
   "Settings": {
     "ScriptName": "CP Batch",
     "SendMail": {
@@ -51,6 +52,7 @@
       "ExcelFiles": "(Mandatory) The folder where the monthly Excel files are created and updated. Supports environment variables (e.g., 'ENV:EXCEL_FOLDER')."
     },
     "ExcelFileName": "(Mandatory) The name pattern of the Excel file. Must contain the placeholder '{0}', which is replaced by the month (e.g., '202408 August'), and must end with '.xlsx'. One Excel file is created per month found in the XML files. CAUTION: do not change this once Excel files exist, because the script would start new workbooks instead of appending to the existing ones.",
+    "SkipFilesModifiedWithinSeconds": "(Optional) The number of seconds a file has to be left alone after it was last written to. A file that is still being copied into the folder is already there to be found while only part of it is on disk, so reading it fails on an XML document that has no end. Files touched more recently than this are silently passed over and converted on the next run, without being counted as an error or named in the summary mail. Default value: 5. Raise it when the files arrive over a slow network share, lower it when they are written locally. Use 0 to convert every file the moment it is found.",
     "Settings": {
       "ScriptName": "(Mandatory) Name of the script, used in the log file names and as the source in the Windows event log.",
       "SendMail": {

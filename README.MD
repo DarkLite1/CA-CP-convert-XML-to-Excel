@@ -161,8 +161,8 @@ never have to be stored in the configuration file.
 
 The file has two halves:
 
-- **`Type`, `MaxConcurrentJobs`, `Path`, `ExcelFileName`** — what to convert and
-  where the files live.
+- **`Type`, `MaxConcurrentJobs`, `Path`, `ExcelFileName`,
+  `SkipFilesModifiedWithinSeconds`** — what to convert and where the files live.
 - **`Settings`** — how the script reports: `SendMail` (sender, recipients, when
   to send, SMTP server, MailKit/MimeKit assembly paths), `SaveLogFiles` (where
   the dated log folder goes and how long logs are kept) and `SaveInEventLog`
@@ -179,6 +179,13 @@ A few values are worth calling out:
   time corrupt it.
 - **`SendMail.When`** accepts `Never`, `Always`, `OnlyOnError` or
   `OnlyOnErrorOrAction`.
+- **`SkipFilesModifiedWithinSeconds`** is how long a file is left alone
+  after it was last written to, `5` seconds by default. A file that is still
+  being copied into the folder is already there to be found while only part of
+  it is on disk, so reading it would fail on an XML document that has no end.
+  Such a file is passed over without a word and converted whole on the next run.
+  Raise it for files arriving over a slow network share, set it to `0` for files
+  written locally.
 
 ## 📄 Logging
 

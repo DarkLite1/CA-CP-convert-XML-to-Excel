@@ -26,7 +26,30 @@ BeforeAll {
         <#
             .SYNOPSIS
                 A folder set and a configuration file for one test.
+
+            .PARAMETER MaxConcurrentJobs
+                How many jobs the run may use for both stages. The default of 1
+                runs everything in this runspace; anything higher runs it in
+                parallel runspaces, which is a different code path in the
+                orchestrator.
         #>
+        param (
+            [int]$MaxConcurrentJobs = 1,
+            <#
+                Zero by default, because these tests write their XML file and
+                convert it in the same breath. A file is normally left alone for
+                a few seconds after it was last written to, in case it is still
+                arriving, and the tests would find nothing to convert.
+            #>
+            [int]$SkipFilesModifiedWithinSeconds = 0,
+            <#
+                Leaves the property out of the configuration file altogether,
+                for the tests that are about the waiting itself and want the
+                default of the script rather than a value of their own.
+            #>
+            [Switch]$WithoutSkipFilesModifiedWithinSeconds
+        )
+
         $testRoot = Join-Path $TestDrive "run_$(New-Guid)"
 
         $run = @{
@@ -41,9 +64,12 @@ BeforeAll {
             $null = New-Item -Path $folder -ItemType 'Directory' -Force
         }
 
-        @{
+        $configuration = @{
             Type              = 'Batch'
-            MaxConcurrentJobs = @{ GetXmlFileDates = 1; CreateExcelFile = 1 }
+            MaxConcurrentJobs = @{
+                GetXmlFileDates = $MaxConcurrentJobs
+                CreateExcelFile = $MaxConcurrentJobs
+            }
             Path              = @{ XmlFiles = $run.Xml; ExcelFiles = $run.Excel }
             ExcelFileName     = 'Batches - {0}.xlsx'
             Settings          = @{
@@ -62,7 +88,15 @@ BeforeAll {
                 SaveLogFiles   = @{ Where = @{ Folder = $run.Log }; DeleteLogsAfterDays = 0 }
                 SaveInEventLog = @{ Save = $false; LogName = 'Scripts' }
             }
-        } | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $run.Config -Encoding UTF8
+        }
+
+        if (-not $WithoutSkipFilesModifiedWithinSeconds) {
+            $configuration.SkipFilesModifiedWithinSeconds =
+            $SkipFilesModifiedWithinSeconds
+        }
+
+        $configuration | ConvertTo-Json -Depth 10 |
+        Set-Content -LiteralPath $run.Config -Encoding UTF8
 
         $run
     }
@@ -283,6 +317,143 @@ Describe 'Overview.xlsx' {
         It 'empties the folder, so the file is not seen again next run' {
             @(Get-ChildItem -LiteralPath $run.Xml -Filter '*.xml' -File) |
             Should-BeCollection -Count 0
+        }
+    }
+
+    Context 'a file that is still being written to' {
+        <#
+            A file that is still being copied into the folder is already there
+            to be found while only part of it is on disk, so reading it fails on
+            an XML document that has no end. Nothing is wrong with the file: the
+            run looked too early. It has to be left alone, without a word, and
+            converted whole on the next run.
+
+            The configuration file of this run does not hold
+            'SkipFilesModifiedWithinSeconds' at all, so this also proves the
+            default of five seconds that a configuration file written before the
+            property existed falls back on.
+        #>
+        BeforeAll {
+            $script:run = New-TestRunHC -WithoutSkipFilesModifiedWithinSeconds
+
+            $script:xmlPath = Join-Path $run.Xml 'Arriving.xml'
+            (New-BatchXmlHC -LoadStartDate '2024-08-16T09:30:00').Save($xmlPath)
+
+            <#
+                Set on the file itself rather than by waiting, so the test says
+                what it means and takes no time at all.
+            #>
+            (Get-Item $xmlPath).LastWriteTime = Get-Date
+
+            Invoke-TestRunHC -Run $run
+        }
+
+        It 'converts nothing' {
+            @(Get-ChildItem -LiteralPath $run.Excel -Filter '*.xlsx') |
+            Should-BeCollection -Count 0
+        }
+
+        It 'leaves the file in the folder for the next run' {
+            Test-Path -LiteralPath $xmlPath | Should-BeTrue
+        }
+
+        It 'says nothing about it, because there is nothing wrong' {
+            $run.Errors | Should-BeCollection -Count 0
+        }
+    }
+
+    Context 'a file that was written long enough ago' {
+        BeforeAll {
+            $script:run = New-TestRunHC -WithoutSkipFilesModifiedWithinSeconds
+
+            $xmlPath = Join-Path $run.Xml 'Arrived.xml'
+            (New-BatchXmlHC -LoadStartDate '2024-08-16T09:30:00').Save($xmlPath)
+
+            (Get-Item $xmlPath).LastWriteTime = (Get-Date).AddMinutes(-1)
+
+            Invoke-TestRunHC -Run $run
+            $script:row = (Get-OverviewHC -Run $run)[0]
+        }
+
+        It 'converts it' {
+            $row.AddedToSheet | Should-BeTrue
+        }
+
+        It 'archives it' {
+            $row.Archived | Should-BeTrue
+        }
+    }
+
+    Context 'the waiting time is set to zero' {
+        <#
+            For a folder the files are written to locally, where there is
+            nothing to wait for. This is the value the rest of the tests in this
+            file run on, so it is the one path proved on purpose rather than in
+            passing: a value of zero in the configuration file is read and used,
+            and is not mistaken for a missing property that falls back on the
+            default of five.
+        #>
+        BeforeAll {
+            $script:run = New-TestRunHC -SkipFilesModifiedWithinSeconds 0
+
+            $xmlPath = Join-Path $run.Xml 'JustWritten.xml'
+            (New-BatchXmlHC -LoadStartDate '2024-08-16T09:30:00').Save($xmlPath)
+
+            (Get-Item $xmlPath).LastWriteTime = Get-Date
+
+            Invoke-TestRunHC -Run $run
+            $script:row = (Get-OverviewHC -Run $run)[0]
+        }
+
+        It 'converts a file that was just written' {
+            $row.AddedToSheet | Should-BeTrue
+        }
+
+        It 'raises no error' {
+            $run.Errors | Should-BeCollection -Count 0
+        }
+    }
+
+    Context 'a run in parallel' {
+        <#
+            The parallel and the sequential path are two different script
+            blocks, because a parallel one runs in its own runspace and has to
+            pull in what it needs with '$using:' while a sequential one must
+            not. Only the sequential path was covered, so a mistake in the
+            parallel one showed up in production and nowhere else.
+
+            Each month writes its own workbook here. Two jobs writing the same
+            workbook at the same time corrupt it, which is why the configuration
+            warns against 'CreateExcelFile' above 1 for anything else.
+        #>
+        BeforeAll {
+            $script:run = New-TestRunHC -MaxConcurrentJobs 2
+
+            (New-BatchXmlHC -LoadStartDate '2024-08-16T09:30:00').Save(
+                (Join-Path $run.Xml 'August.xml'))
+            (New-BatchXmlHC -LoadStartDate '2024-09-02T08:15:00').Save(
+                (Join-Path $run.Xml 'September.xml'))
+
+            Invoke-TestRunHC -Run $run
+            $script:rows = Get-OverviewHC -Run $run
+        }
+
+        It 'converts both files' {
+            $rows | Should-BeCollection -Count 2
+            $rows.AddedToSheet | Should-BeCollection @($true, $true)
+        }
+
+        It 'writes one Excel file per month' {
+            @(Get-ChildItem -LiteralPath $run.Excel -Filter '*.xlsx') |
+            Should-BeCollection -Count 2
+        }
+
+        It 'archives both files' {
+            $rows.Archived | Should-BeCollection @($true, $true)
+        }
+
+        It 'raises no error' {
+            $run.Errors | Should-BeCollection -Count 0
         }
     }
 

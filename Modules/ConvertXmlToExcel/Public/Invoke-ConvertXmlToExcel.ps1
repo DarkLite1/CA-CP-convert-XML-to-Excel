@@ -202,6 +202,25 @@ function Invoke-ConvertXmlToExcel {
                 throw "Property 'ExcelFileName' with value '$($config.ExcelFileName)' is not ending with file extension '.xlsx'"
             }
 
+            #region Test SkipFilesModifiedWithinSeconds
+            <#
+                Optional, so a configuration file written before this existed
+                keeps working and gets the default.
+            #>
+            if ($null -ne $config.SkipFilesModifiedWithinSeconds) {
+                try {
+                    $skipSeconds = [int]$config.SkipFilesModifiedWithinSeconds
+                }
+                catch {
+                    throw "Property 'SkipFilesModifiedWithinSeconds' needs to be a number, the value '$($config.SkipFilesModifiedWithinSeconds)' is not supported."
+                }
+
+                if ($skipSeconds -lt 0) {
+                    throw "Property 'SkipFilesModifiedWithinSeconds' with value '$skipSeconds' cannot be negative."
+                }
+            }
+            #endregion
+
             if (-not $config.Settings.ScriptName) {
                 throw "Property 'Settings.ScriptName' not found"
             }
@@ -264,6 +283,13 @@ function Invoke-ConvertXmlToExcel {
         $ExcelFilesFolder = $config.Path.ExcelFiles
         $ExcelFileName = $config.ExcelFileName
 
+        $skipFilesModifiedWithinSeconds = if (
+            $null -ne $config.SkipFilesModifiedWithinSeconds
+        ) {
+            [int]$config.SkipFilesModifiedWithinSeconds
+        }
+        else { 5 }
+
         #region The values both stages hand to their script block
         <#
             A flat object holding nothing but strings: the two script paths, the
@@ -284,9 +310,32 @@ function Invoke-ConvertXmlToExcel {
         #region Get the XML files
         Write-Verbose "Get xml files in folder '$XmlFilesFolder'"
 
-        $xmlFiles = @(
+        <#
+            A file that is still being copied into the folder is already there
+            to be found, but only part of it is on disk, so reading it fails on
+            an XML document that has no end. That is not a broken file and not
+            something to report: it is a run that looked too early. The file is
+            left where it is and converts on the next run, whole.
+
+            The moment it was last written to is what decides. Anything touched
+            more recently than the configured number of seconds is passed over
+            without a word, which is why nothing counts it as an error or names
+            it in the mail. Reading the file to find out would mean opening the
+            very file that may still be busy.
+        #>
+        $writtenBefore = (Get-Date).AddSeconds(-$skipFilesModifiedWithinSeconds)
+
+        $allXmlFiles = @(
             Get-ChildItem $XmlFilesFolder -Filter '*.xml' -File | Sort-Object CreationTime
         )
+
+        $xmlFiles = @(
+            $allXmlFiles.where({ $_.LastWriteTime -lt $writtenBefore })
+        )
+
+        if ($allXmlFiles.Count -ne $xmlFiles.Count) {
+            Write-Verbose "Skipped $($allXmlFiles.Count - $xmlFiles.Count) xml files still being written to, they are converted on the next run"
+        }
 
         Write-Verbose "Found $($xmlFiles.Count) xml files of type '$Type'"
         #endregion
