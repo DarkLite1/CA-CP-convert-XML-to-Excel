@@ -13,6 +13,34 @@
         engine does support.
 #>
 
+function ConvertTo-HtmlSafeHC {
+    <#
+        .SYNOPSIS
+            Make a value safe to put inside HTML.
+
+        .DESCRIPTION
+            The mail is HTML built by hand, and the values dropped into it come
+            from outside: file names, and error messages that carry whatever the
+            failure said. A single '<' in one of those closes nothing and opens
+            a tag that was never meant, and from there the rest of the mail is
+            read as markup instead of text. What follows is not lost, it is
+            simply not shown, which is the worst way to lose an error message.
+
+            Empty and null come back as an empty string, so a missing value
+            leaves an empty cell rather than the word 'null'.
+
+        .EXAMPLE
+            ConvertTo-HtmlSafeHC -Value 'a <b> & c'   # 'a &lt;b&gt; &amp; c'
+    #>
+    param (
+        $Value
+    )
+
+    if ($null -eq $Value) { return '' }
+
+    [System.Net.WebUtility]::HtmlEncode([String]$Value)
+}
+
 function New-SummaryMailHC {
     <#
         .SYNOPSIS
@@ -83,7 +111,8 @@ function New-SummaryMailHC {
     $body = [System.Text.StringBuilder]::new()
 
     $null = $body.Append(
-        ("<p style='$cellStyle'>Summary of the XML to Excel conversion (type '{0}'):</p>" -f $Type)
+        ("<p style='$cellStyle'>Summary of the XML to Excel conversion (type '{0}'):</p>" -f
+        (ConvertTo-HtmlSafeHC $Type))
     )
 
     #region Excel files, most recent month first
@@ -116,7 +145,9 @@ function New-SummaryMailHC {
         foreach ($row in $perExcelFile) {
             $null = $body.Append(
                 ("<tr><td style='$cellStyle'>{0}</td><td style='$cellStyle'>{1}</td><td style='$numberStyle'>{2}</td><td style='$numberStyle'>{3}</td></tr>" -f
-                $row.MonthKey, $row.ExcelFile, $row.XmlFiles, $row.Rows)
+                (ConvertTo-HtmlSafeHC $row.MonthKey),
+                (ConvertTo-HtmlSafeHC $row.ExcelFile),
+                $row.XmlFiles, $row.Rows)
             )
         }
 
@@ -143,7 +174,8 @@ function New-SummaryMailHC {
         foreach ($item in $Collection.NotArchived) {
             $null = $body.Append(
                 ("<tr><td style='$cellStyle' bgcolor='#fee2e2'>{0}</td><td style='$cellStyle' bgcolor='#fee2e2'>{1}</td></tr>" -f
-                $item.File.Name, $item.Reason)
+                (ConvertTo-HtmlSafeHC $item.File.Name),
+                (ConvertTo-HtmlSafeHC $item.Reason))
             )
         }
 
@@ -211,8 +243,10 @@ function New-SummaryMailHC {
     $null = $body.Append(
         "<p style='$cellStyle'>Folders:</p>" +
         "<table border='1' cellpadding='5' cellspacing='0' style='$tableStyle'>" +
-        ("<tr><td style='$cellStyle$headerStyle'>XML files</td><td style='$cellStyle'><a href='{0}'>{0}</a></td></tr>" -f $Path.XmlFiles) +
-        ("<tr><td style='$cellStyle$headerStyle'>Excel files</td><td style='$cellStyle'><a href='{0}'>{0}</a></td></tr>" -f $Path.ExcelFiles) +
+        ("<tr><td style='$cellStyle$headerStyle'>XML files</td><td style='$cellStyle'><a href='{0}'>{0}</a></td></tr>" -f
+        (ConvertTo-HtmlSafeHC $Path.XmlFiles)) +
+        ("<tr><td style='$cellStyle$headerStyle'>Excel files</td><td style='$cellStyle'><a href='{0}'>{0}</a></td></tr>" -f
+        (ConvertTo-HtmlSafeHC $Path.ExcelFiles)) +
         '</table>'
     )
     #endregion

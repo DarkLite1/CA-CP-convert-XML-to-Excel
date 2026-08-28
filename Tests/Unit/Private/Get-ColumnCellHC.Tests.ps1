@@ -29,4 +29,30 @@ Describe 'Get-ColumnCellHC' {
         $result = Get-ColumnCellHC -RowNumber 1 -RequiredColumns 53
         $result[52] | Should-Be 'BA1'
     }
+
+    Context 'past the two letter addresses' {
+        <#
+            A column letter is not quite a number in base 26: there is no zero
+            digit, so 'Z' is followed by 'AA'. Counting a letter for the first
+            position and a letter for the second runs out at 'ZZ' and starts
+            handing out two letter addresses again from there, which are
+            addresses of columns that were already written.
+        #>
+        BeforeAll {
+            $script:result = Get-ColumnCellHC -RowNumber 1 -RequiredColumns 705
+        }
+
+        It 'ends the two letter addresses at ZZ' {
+            $result[701] | Should-Be 'ZZ1'
+        }
+
+        It 'goes on with three letters' {
+            $result[702] | Should-Be 'AAA1'
+            $result[703] | Should-Be 'AAB1'
+        }
+
+        It 'never returns the same address twice' {
+            @($result | Sort-Object -Unique) | Should-BeCollection -Count 705
+        }
+    }
 }

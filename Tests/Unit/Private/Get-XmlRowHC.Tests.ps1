@@ -69,6 +69,32 @@ Describe 'Get-XmlRowHC' {
         }
     }
 
+    Context 'an element name carrying a prefix' {
+        <#
+            Get-XmlFileMonthHC decides which month a record belongs to and
+            matches on the local name, so the row builder has to read the values
+            by local name as well. Keyed on the full name the two disagree on a
+            file that carries prefixes: the month is found and not a single
+            value of the record is.
+        #>
+        It 'reads the value by its local name' {
+            $xml = [xml]@'
+<plant xmlns:cp="urn:contoso:cp">
+  <plantHeader>
+    <cp:plant_code>P1</cp:plant_code>
+    <plant_name>Plant one</plant_name>
+  </plantHeader>
+  <batchComputers></batchComputers>
+</plant>
+'@
+
+            $map = Get-ChildValueMapHC -Node $xml.plant.plantHeader
+
+            $map['plant_code'] | Should-Be 'P1'
+            $map['plant_name'] | Should-Be 'Plant one'
+        }
+    }
+
     Context 'the type a cell gets' {
         <#
             An identifier turned into a number is damaged the moment it is
@@ -84,6 +110,7 @@ Describe 'Get-XmlRowHC' {
 
             $script:delivery = $rows.Where({ $_.Key -eq 'delivery' })[0]
             $script:item = $rows.Where({ $_.Key -eq 'item' })[0]
+            $script:discharging = $rows.Where({ $_.Key -eq 'discharging' })[0]
         }
 
         It 'keeps the leading zeros of an order number' {
@@ -108,6 +135,19 @@ Describe 'Get-XmlRowHC' {
         It 'keeps the batch id as text and its counter as a number' {
             $delivery.Cells['AE'] | Should-HaveType ([string])
             $delivery.Cells['AF'] | Should-HaveType ([double])
+        }
+
+        It 'reads the discharging operations of a batch' {
+            <#
+                A container that sits inside the batch header rather than
+                beside it, so it is reached with an XPath of its own. Reading
+                it wrongly loses every discharging row without failing.
+            #>
+            $discharging | Should-BeTruthy
+            $discharging.Cells['D'] | Should-Be 'B1'
+            $discharging.Cells['F'] | Should-Be '0007'
+            $discharging.Cells['G'] | Should-Be 'Cement'
+            $discharging.Cells['H'] | Should-Be ([datetime]'2024-08-16T09:33:00')
         }
 
         It 'writes the dosing times as real dates' {

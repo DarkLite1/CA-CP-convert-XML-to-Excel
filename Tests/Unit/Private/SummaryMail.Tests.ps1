@@ -223,4 +223,62 @@ Describe 'New-SummaryMailHC' {
             $outlookBody | Should-MatchString 'C:\\Xlsx'
         }
     }
+
+    Context 'a value that would be read as HTML' {
+        <#
+            The mail is HTML built by hand and these values come from outside:
+            a file name, and an error message carrying whatever the failure
+            said. A single '<' opens a tag that was never meant, and everything
+            after it is read as markup instead of shown as text, which is the
+            worst way to lose an error message.
+        #>
+        BeforeAll {
+            $collection = @{
+                Added       = @()
+                NotArchived = @(
+                    [PSCustomObject]@{
+                        File   = [PSCustomObject]@{ Name = 'a<b>&c.xml' }
+                        Reason = "Failed reading <root> & 'end' not found"
+                    }
+                )
+            }
+
+            $script:mail = New-SummaryMailHC -Type 'Batch' `
+                -Collection $collection -Count (New-CountHC -NotArchived 1) `
+                -Path $path
+        }
+
+        It 'writes the characters escaped' {
+            $mail.Body | Should-MatchString 'a&lt;b&gt;&amp;c\.xml'
+        }
+
+        It 'keeps the whole error message in the mail' {
+            $mail.Body | Should-MatchString 'Failed reading &lt;root&gt; &amp;'
+        }
+
+        It 'does not let the value itself become markup' {
+            <#
+                On the value as it was given, not on the tag names in it: the
+                mail has headings of its own in bold, so a '<b>' in the body is
+                perfectly normal. What may not be there is this file name and
+                this message with their characters intact.
+            #>
+            $mail.Body.Contains('a<b>&c.xml') | Should-BeFalse
+            $mail.Body.Contains('<root>') | Should-BeFalse
+        }
+    }
+}
+
+Describe 'ConvertTo-HtmlSafeHC' {
+    It 'escapes the characters that carry meaning in HTML' {
+        ConvertTo-HtmlSafeHC -Value 'a <b> & c' | Should-Be 'a &lt;b&gt; &amp; c'
+    }
+
+    It 'returns an empty string for null' {
+        ConvertTo-HtmlSafeHC -Value $null | Should-Be ''
+    }
+
+    It 'leaves plain text alone' {
+        ConvertTo-HtmlSafeHC -Value 'Plant one' | Should-Be 'Plant one'
+    }
 }

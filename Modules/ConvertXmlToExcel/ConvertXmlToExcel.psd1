@@ -35,7 +35,7 @@ month.
     PrivateData          = @{
         PSData = @{
             Tags         = @('TMS', 'CP', 'XML', 'Excel', 'Batch', 'Alarm', 'Sequence')
-            ProjectUri   = 'https://github.com/DarkLite1/CA-CP-convert-XML-file-to-Excel'
+            ProjectUri   = 'https://github.com/DarkLite1/CA-CP-convert-XML-to-Excel'
             ReleaseNotes = 'Merge of the batch, alarm and sequence scripts. One XML file can now be written to more than one monthly Excel file.'
         }
     }

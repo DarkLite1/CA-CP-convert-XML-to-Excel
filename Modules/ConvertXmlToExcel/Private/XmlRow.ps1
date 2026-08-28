@@ -94,8 +94,15 @@ function Get-ChildValueMapHC {
 
         $firstChild = $child.FirstChild
 
+        <#
+            Keyed on the local name, so a prefix in front of an element name
+            does not change the key. Get-XmlFileMonthHC, which decides which
+            month a record belongs to, matches on the local name as well: on a
+            file that carries prefixes the two would otherwise disagree, one
+            finding the record and the other finding none of its values.
+        #>
         if (-not $firstChild) {
-            $map[$child.Name] = ''
+            $map[$child.LocalName] = ''
             continue
         }
 
@@ -104,7 +111,7 @@ function Get-ChildValueMapHC {
             continue
         }
 
-        $map[$child.Name] = $child.InnerText
+        $map[$child.LocalName] = $child.InnerText
     }
 
     $map
@@ -357,11 +364,6 @@ function Get-BatchRowHC {
                 slump_unit                = $header['slump_unit']
                 mixer_discharge_time_unit = $header['mixer_discharge_time_unit']
                 <#
-                    A container of other elements, so it is not in the map and
-                    is still read from the node. It is iterated further down.
-                #>
-                dischargingOperationTimes = $batchHeaderNode.dischargingOperationTimes
-                <#
                     'batch_id' identifies the batch, so it is text.
                     'batch_id_nr' is the counter of the batch within its
                     delivery, so it stays a number.
@@ -441,9 +443,15 @@ function Get-BatchRowHC {
             #endregion
 
             #region Add rows to worksheet batchesDischarging
+            <#
+                Read from the node itself. It used to travel here as a property
+                on the object above, which is a hop that gave nothing: the node
+                is right here, and the object is meant to hold the values of the
+                header, not the containers next to them.
+            #>
             foreach (
                 $dischargingOperation in
-                $batchHeader.dischargingOperationTimes.discharging
+                $batchHeaderNode.dischargingOperationTimes.discharging
             ) {
                 $discharging = Get-ChildValueMapHC -Node $dischargingOperation
 

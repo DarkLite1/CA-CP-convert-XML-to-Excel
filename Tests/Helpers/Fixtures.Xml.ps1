@@ -55,6 +55,18 @@ function New-BatchXmlHC {
                 <batch_id>B1</batch_id>
                 <batch_id_nr>1</batch_id_nr>
                 <qty>10</qty>
+                <!-- A container inside the header: read from the node itself
+                     and not through the map of header values. -->
+                <dischargingOperationTimes>
+                  <discharging>
+                    <batch_id>B1</batch_id>
+                    <batch_id_nr>1</batch_id_nr>
+                    <scale_id>0007</scale_id>
+                    <material_type>Cement</material_type>
+                    <discharge_start_time>2024-08-16T09:33:00</discharge_start_time>
+                    <discharge_end_time>2024-08-16T09:33:40</discharge_end_time>
+                  </discharging>
+                </dischargingOperationTimes>
               </batchHeader>
               <batchItems>
                 <batchItem>

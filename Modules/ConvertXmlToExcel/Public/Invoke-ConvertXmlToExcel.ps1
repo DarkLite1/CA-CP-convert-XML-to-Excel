@@ -325,8 +325,14 @@ function Invoke-ConvertXmlToExcel {
         #>
         $writtenBefore = (Get-Date).AddSeconds(-$skipFilesModifiedWithinSeconds)
 
+        <#
+            Not sorted here. The files are grouped per month further down and
+            each group is sorted by name before it is written, so ordering the
+            whole folder by creation time first was thrown away again, and it
+            reads the creation time of every file in the folder to do it.
+        #>
         $allXmlFiles = @(
-            Get-ChildItem $XmlFilesFolder -Filter '*.xml' -File | Sort-Object CreationTime
+            Get-ChildItem $XmlFilesFolder -Filter '*.xml' -File
         )
 
         $xmlFiles = @(

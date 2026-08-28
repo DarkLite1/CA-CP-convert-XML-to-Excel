@@ -9,79 +9,52 @@ function Get-ColumnCellHC {
             Used to write the table header row without hard coding column
             letters, so a worksheet with more than 26 columns keeps working.
 
+            The other direction, a column letter to a column number, is not
+            here: it is done where it is needed, inside Add-RowToWorkbookHC,
+            against a cache of its own. That conversion runs once per cell of
+            every row written, which is the hottest path of the whole script,
+            so it is worth the few lines it takes to keep the call out of it.
+            A copy used to live here as well and was called by nothing.
+
         .EXAMPLE
             Get-ColumnCellHC -RowNumber 2 -RequiredColumns 3   # A2, B2, C2
     #>
     param (
         [Parameter(Mandatory)]
-        [double]$RowNumber,
-        [double]$RequiredColumns = 50
+        [int]$RowNumber,
+        [int]$RequiredColumns = 50
     )
 
-    $alphaToZulu = [char[]](65..90)
-
-    for ($i = 0; $i -lt $RequiredColumns; $i++) {
-
-        $start = $null
-
-        $result = [math]::Floor($i / 26)
-
-        if ($result -ge 1) {
-            $start = $alphaToZulu[$result - 1]
-
-            $index = $i - (26 * $result)
-        }
-        else {
-            $index = $i
-        }
-
-        '{0}{1}{2}' -f $start, $alphaToZulu[$index], $RowNumber
-    }
-}
-
-<#
-    Column letter to column number, remembered after the first conversion.
-
-    A worksheet has at most a few dozen columns but a run writes millions of
-    cells, so every lookup after the first few is a hash hit.
-#>
-$script:ColumnNumberCache = @{}
-
-function Get-ColumnNumberHC {
     <#
-        .SYNOPSIS
-            Convert a column letter to its column number: A is 1, Z is 26,
-            AA is 27.
+        Counted in base 26, from the last letter to the first, because a column
+        letter is not quite a number in base 26: there is no zero digit, so 'Z'
+        is followed by 'AA' and not by 'BA'. Subtracting one from what is left
+        after each letter is what accounts for that.
 
-        .DESCRIPTION
-            EPPlus can resolve a column letter itself, but only as part of
-            parsing a full cell address like 'AB1234'. Writing a cell by row
-            and column number avoids that parsing, and this is what turns the
-            letters used in the worksheet definitions into numbers.
-
-        .EXAMPLE
-            Get-ColumnNumberHC -ColumnLetter 'AB'   # 28
+        Worked out this way rather than with a letter for the first position and
+        a letter for the second, which had nothing to put in the first position
+        beyond column 'ZZ' and silently produced an address of two letters again
+        from there on. No worksheet here comes near 702 columns, but a wrong
+        address is written without complaint, so it is worth not being able to
+        happen.
     #>
-    param (
-        [Parameter(Mandatory)]
-        [String]$ColumnLetter
-    )
+    for ($i = 0; $i -lt $RequiredColumns; $i++) {
+        $columnLetter = ''
+        $remaining = $i
 
-    $columnNumber = $script:ColumnNumberCache[$ColumnLetter]
+        do {
+            <#
+                Both casts to [int] are needed. Dividing two whole numbers
+                gives a fractional number in PowerShell, and [math]::Floor
+                hands one back as well, so without them what is left over is
+                no longer a whole number and [char] refuses it outright:
+                'Cannot convert value "65" to type "System.Char"'.
+            #>
+            $columnLetter = [char][int](65 + ($remaining % 26)) + $columnLetter
 
-    if ($columnNumber) { return $columnNumber }
+            $remaining = [int][math]::Floor($remaining / 26) - 1
+        } while ($remaining -ge 0)
 
-    $columnNumber = 0
-
-    foreach ($letter in $ColumnLetter.ToUpperInvariant().ToCharArray()) {
-        if ($letter -lt 'A' -or $letter -gt 'Z') {
-            throw "Column '$ColumnLetter' is not a valid column letter"
-        }
-
-        $columnNumber = ($columnNumber * 26) + ([int]$letter - 64)
+        '{0}{1}' -f $columnLetter, $RowNumber
     }
-
-    $script:ColumnNumberCache[$ColumnLetter] = $columnNumber
-
-    $columnNumber
 }
